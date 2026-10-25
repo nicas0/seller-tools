@@ -150,10 +150,11 @@ const Cleaner = (() => {
     return best[1] > 0 ? best[0] : ",";
   }
 
-  // RFC 4180 parsing, strict about broken quotes so nothing is silently misread.
+  // RFC 4180 parsing, strict about broken quotes so nothing is silently misread. A line with nothing on it
+  // is marked row.emptyLine, so it isn't mistaken for a row whose one cell is "" (found by tests/test_fuzz.py).
   function parse(text, delim) {
     const rows = [];
-    let row = [], field = "", i = 0, quoted = false, atStart = true;
+    let row = [], field = "", i = 0, quoted = false, atStart = true, hadQuotes = false;
     const n = text.length;
     while (i < n) {
       const ch = text[i];
@@ -169,11 +170,14 @@ const Cleaner = (() => {
         }
         field += ch; i++; continue;
       }
-      if (ch === '"' && atStart) { quoted = true; atStart = false; i++; continue; }
+      if (ch === '"' && atStart) { quoted = true; atStart = false; hadQuotes = true; i++; continue; }
       if (ch === '"') throw new CleanError(`Row ${rows.length + 1} has a quote in an unexpected place.`);
-      if (ch === delim) { row.push(field); field = ""; atStart = true; i++; continue; }
+      if (ch === delim) { row.push(field); field = ""; atStart = true; hadQuotes = false; i++; continue; }
       if (ch === "\r" || ch === "\n") {
-        row.push(field); rows.push(row); row = []; field = ""; atStart = true;
+        const empty = !row.length && field === "" && !hadQuotes;
+        row.push(field);
+        if (empty) row.emptyLine = true;
+        rows.push(row); row = []; field = ""; atStart = true; hadQuotes = false;
         // "\r\r\n" is one line break written twice over (a Windows file converted again), never an empty row
         i += (ch === "\r" && text[i + 1] === "\r" && text[i + 2] === "\n") ? 3 : (ch === "\r" && text[i + 1] === "\n") ? 2 : 1;
         continue;
@@ -181,7 +185,7 @@ const Cleaner = (() => {
       field += ch; atStart = false; i++;
     }
     if (quoted) throw new CleanError("The file ends inside a quoted value (an opening quote is never closed).");
-    if (field !== "" || row.length) { row.push(field); rows.push(row); }
+    if (field !== "" || row.length || hadQuotes) { row.push(field); rows.push(row); }  // a final "" is a row
     return rows;
   }
 
@@ -205,7 +209,7 @@ const Cleaner = (() => {
     const { text, encoding, bom } = decode(bytes);
     const delim = detectDelimiter(text);
     let rows = parse(text, delim);
-    const blankLine = (r) => r.length === 1 && r[0] === "";
+    const blankLine = (r) => r.emptyLine === true;  // a truly empty line, not a row whose one cell is ""
     let emptyLinesAtEnd = 0;
     while (rows.length > 1 && blankLine(rows[rows.length - 1])) { rows.pop(); emptyLinesAtEnd++; }
     if (!rows.length || blankLine(rows[0])) throw new CleanError("The file is empty (or its first line is).");
@@ -249,7 +253,9 @@ const Cleaner = (() => {
   }
 
   function toCSV(rows, delim) {
-    return rows.map((r) => r.map((v) => csvField(v, delim)).join(delim)).join("\r\n") + "\r\n";
+    // A row that is one blank cell is written as "" (as Python's csv module does): an empty line would read
+    // back as no row at all, losing the row (found by tests/test_fuzz.py).
+    return rows.map((r) => (r.length === 1 && r[0] === "" ? '""' : r.map((v) => csvField(v, delim)).join(delim))).join("\r\n") + "\r\n";
   }
 
   // options: { names: [new header per column], key: [column indexes], neutralize: bool }
