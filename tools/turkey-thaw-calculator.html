@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Turkey thaw and cooking time calculator: when to thaw and when it goes in the oven</title>
+<meta name="description" content="Free turkey calculator: enter your turkey's weight and when you want to eat, and see the day to start thawing it in the fridge (or cold water) and the time it goes in the oven, from the USDA's tables.">
+<link rel="canonical" href="https://nicas0.github.io/seller-tools/tools/turkey-thaw-calculator.html">
+<meta property="og:title" content="Turkey thaw and cooking time calculator">
+<meta property="og:description" content="Your turkey's weight and dinner time in; the day to start thawing and the time it goes in the oven out. From the USDA's tables.">
+<meta property="og:url" content="https://nicas0.github.io/seller-tools/tools/turkey-thaw-calculator.html">
+<meta property="og:image" content="https://nicas0.github.io/seller-tools/img/share.png">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .calc { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 16px; }
+  .calc label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+  .calc input, .calc select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); width: 100%; }
+  .calc input:focus, .calc select:focus { outline: 3px solid var(--green); outline-offset: 1px; }
+  .big { font-size: 28px; font-weight: 800; }
+  #plan li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<header><a href="../index.html">Seller Tools</a><nav><a href="../guides.html">Guides</a></nav></header>
+<main>
+<h1>Turkey thaw and cooking time calculator</h1>
+<p class="lede">Enter your turkey's weight and when you want to eat. See the day to start thawing it and the time it
+goes in the oven, worked out from the USDA's tables. Everything runs in your browser.</p>
+<div class="card">
+  <div class="calc">
+    <label>Turkey weight (pounds)<input id="weight" type="text" inputmode="decimal" value="16"></label>
+    <label>Stuffed?<select id="stuffed"><option value="no">No, stuffing cooked separately</option><option value="yes">Yes, stuffed</option></select></label>
+    <label>Thawing<select id="thaw"><option value="fridge">Frozen: thaw in the fridge</option><option value="water">Frozen: thaw in cold water</option><option value="fresh">Fresh, not frozen</option></select></label>
+    <label>Dinner date<input id="date" type="date" value="2026-11-26"></label>
+    <label>Dinner time<input id="time" type="time" value="15:00"></label>
+    <label>Guests (optional)<input id="guests" type="text" inputmode="numeric" value=""></label>
+  </div>
+</div>
+<div class="card" aria-live="polite">
+  <p id="startLabel">Start thawing in the fridge:</p>
+  <p class="big" id="keep">-</p>
+  <p id="targetPrice"></p>
+  <ul id="plan"></ul>
+</div>
+<h2>The USDA's times</h2>
+<p>Oven at 325 &deg;F. Times are approximate: the turkey is done when a food thermometer reads <b>165 &deg;F</b> in the
+thickest part of the thigh, the wing and the thickest part of the breast. Let it rest 20 minutes before carving.</p>
+<table>
+<tr><th>Weight</th><th class="num">Fridge thawing</th><th class="num">Roasting, unstuffed</th><th class="num">Roasting, stuffed</th></tr>
+<tr><td>8 to 12 pounds</td><td class="num">1 to 3 days</td><td class="num">2&frac34; to 3 hours</td><td class="num">3 to 3&frac12; hours</td></tr>
+<tr><td>12 to 14 pounds</td><td class="num">3 to 4 days</td><td class="num">3 to 3&frac34; hours</td><td class="num">3&frac12; to 4 hours</td></tr>
+<tr><td>14 to 16 pounds</td><td class="num">3 to 4 days</td><td class="num">3&frac34; to 4&frac14; hours</td><td class="num">4 to 4&frac14; hours</td></tr>
+<tr><td>16 to 18 pounds</td><td class="num">4 to 5 days</td><td class="num">3&frac34; to 4&frac14; hours</td><td class="num">4 to 4&frac14; hours</td></tr>
+<tr><td>18 to 20 pounds</td><td class="num">4 to 5 days</td><td class="num">4&frac14; to 4&frac12; hours</td><td class="num">4&frac14; to 4&frac34; hours</td></tr>
+<tr><td>20 to 24 pounds</td><td class="num">5 to 6 days</td><td class="num">4&frac12; to 5 hours</td><td class="num">4&frac34; to 5&frac14; hours</td></tr>
+</table>
+<p>Thawing in cold water takes about 30 minutes per pound: keep the turkey wrapped, change the water every 30 minutes,
+and cook it straight away. A turkey thawed in the fridge keeps there for 1 to 2 more days, so the calculator plans
+with the longer thawing time; on a boundary weight (12, 16, 20 pounds) it uses the longer row.</p>
+<p class="muted">Source: USDA Food Safety and Inspection Service, "Let's Talk Turkey: A Consumer Guide to Safely
+Roasting a Turkey". This calculator is a planning aid, not a substitute for a food thermometer. Outside 8 to 24
+pounds, see the USDA's guide.</p>
+
+</main>
+<footer>Made by nicnak. No tracking, no cookies; this page has no internet access.</footer>
+<script>
+"use strict";
+(() => {
+  // USDA FSIS "Let's Talk Turkey" (read 2026-10-25). [from lb, minutes min, minutes max]; the last row whose "from"
+  // is at or below the weight applies, so boundary weights get the longer time.
+  const ROAST = { no: [[8, 165, 180], [12, 180, 225], [14, 225, 255], [18, 255, 270], [20, 270, 300]],
+                  yes: [[8, 180, 210], [12, 210, 240], [14, 240, 255], [18, 255, 285], [20, 285, 315]] };
+  const FRIDGE_DAYS = [[4, 3], [12, 4], [16, 5], [20, 6]];   // [from lb, days (the longer end)]
+  const REST = 20;
+  const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const $ = (id) => document.getElementById(id);
+  ["weight", "guests", "date", "time"].forEach((id) => $(id).addEventListener("input", calc));
+  ["stuffed", "thaw", "date", "time"].forEach((id) => $(id).addEventListener("change", calc));
+  const row = (table, w) => table.filter((r) => r[0] <= w).pop();
+  const day = (d) => `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  const clock = (d) => `${(d.getHours() + 11) % 12 + 1}:${String(d.getMinutes()).padStart(2, "0")} ${d.getHours() < 12 ? "AM" : "PM"}`;
+  const minus = (d, minutes) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes() - minutes);
+  const daysBefore = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - n);
+  const hours = (m) => `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`;
+  function fail(msg) { $("keep").textContent = "-"; $("targetPrice").textContent = msg; $("plan").innerHTML = ""; }
+  function calc() {
+    const ws = $("weight").value.trim(), dm = /^(\d{4})-(\d\d)-(\d\d)$/.exec($("date").value), tm = /^(\d\d):(\d\d)/.exec($("time").value);
+    const w = /^\d+(\.\d+)?$/.test(ws) ? Number(ws) : NaN;
+    const gs = $("guests").value.trim();
+    if (gs && !/^\d+$/.test(gs)) return fail("Guests: a whole number, like 12.");
+    if (!(w >= 8 && w <= 24)) return fail("Enter a weight from 8 to 24 pounds (the USDA's tables cover those).");
+    if (!dm || !tm) return fail("Choose the dinner date and time.");
+    const dinner = new Date(+dm[1], +dm[2] - 1, +dm[3], +tm[1], +tm[2]);
+    const [, lo, hi] = row(ROAST[$("stuffed").value], w);
+    const ovenIn = minus(dinner, REST + hi), checkFrom = minus(dinner, REST + hi - lo), out = minus(dinner, REST);
+    const items = [];
+    const how = $("thaw").value;
+    if (how === "fridge") {
+      const n = row(FRIDGE_DAYS, w)[1];
+      $("startLabel").textContent = "Start thawing in the fridge:";
+      $("keep").textContent = day(daysBefore(ovenIn, n));
+      items.push(`${day(daysBefore(ovenIn, n))}: turkey into the fridge, still wrapped, on a tray (${n} days for ${w} pounds).`);
+    } else if (how === "water") {
+      const start = minus(ovenIn, Math.round(w * 30));
+      $("startLabel").textContent = "Start thawing in cold water:";
+      $("keep").textContent = `${day(start)}, ${clock(start)}`;
+      items.push(`${day(start)}, ${clock(start)}: into cold water, still wrapped; change the water every 30 minutes (${hours(Math.round(w * 30))}).`);
+    } else {
+      $("startLabel").textContent = "Buy your fresh turkey:";
+      $("keep").textContent = `${day(daysBefore(ovenIn, 2))} or ${day(daysBefore(ovenIn, 1))}`;
+      items.push(`Buy it 1 to 2 days before cooking and keep it in the fridge.`);
+    }
+    items.push(`${day(ovenIn)}, ${clock(ovenIn)}: into a 325 °F oven (${hours(hi)}, the longer USDA time for ${w} pounds${$("stuffed").value === "yes" ? ", stuffed" : ""}).`);
+    items.push(`From ${clock(checkFrom)}: start checking with a food thermometer; it's done at 165 °F.`);
+    items.push(`By ${clock(out)}: out of the oven to rest 20 minutes. Dinner at ${clock(dinner)}.`);
+    $("targetPrice").textContent = `Oven in by ${clock(ovenIn)} on ${day(ovenIn)}.` + (gs ? ` For ${gs} guests, the USDA suggests about ${gs} pounds of turkey (1 pound each).` : "");
+    $("plan").innerHTML = "";
+    items.forEach((t) => { const li = document.createElement("li"); li.textContent = t; $("plan").appendChild(li); });
+  }
+  calc();
+})();
+</script>
+</body>
+</html>
