@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'none'; form-action 'none'; base-uri 'self'">
+<title>Find duplicate rows in Excel without deleting anything (COUNTIFS)</title>
+<meta name="description" content="Flag repeated orders in Excel with one COUNTIFS formula, matching order number and item together, so you check repeats before removing anything. Works for Etsy and Shopify exports.">
+<link rel="canonical" href="https://nicas0.github.io/seller-tools/guides/excel-find-duplicate-rows.html">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header><a href="../index.html">Seller Tools</a><nav><a href="../csv-cleaner.html">CSV Cleaner</a><a href="../profit-check.html">Profit Check</a><a href="../guides.html">Guides</a></nav></header>
+<main>
+
+<h1>Find duplicate rows in Excel without deleting anything</h1>
+<p class="lede">Remove Duplicates deletes rows straight away, and on an order export it deletes real items. Flag
+the repeats first, look at them, then decide.</p>
+<h2>Flag repeats with one formula</h2>
+<ol><li>Find the order number column (for example A) and the item column (SKU or product name, for example E).</li>
+<li>In the first empty column, on row 2, type:<br>
+<kbd>=COUNTIFS($A$2:$A$5000,A2,$E$2:$E$5000,E2)&gt;1</kbd></li>
+<li>Copy it down. <b>TRUE</b> means another row has the same order <i>and</i> item.</li>
+<li>Filter that column for TRUE and compare those rows: if every column matches, it's a real repeat; if the
+quantity or price differs, check that order by hand.</li></ol>
+<p class="note">Matching on the order number alone flags every order with more than one item. That's the usual
+cause of "duplicate orders" that aren't: see <a href="etsy-shopify-duplicate-orders.html">why exports
+repeat order numbers</a>.</p>
+<h2>Without formulas</h2>
+<p>The free <a href="../csv-cleaner.html">CSV Cleaner</a> does the same check in your browser: it lists exact
+repeats and rows with the same order and item but different details, deletes nothing, and adds a "Cleaner note"
+column you can filter on.</p>
+<p><a class="cta" href="../tools/csv-cleaner-free.html">Try it free (up to 50 rows)</a></p>
+
+</main>
+<footer>Made by nicnak. These pages have no tracking and no cookies, and the tools have no internet access: files you drop
+in never leave your computer. Not accounting or tax advice.</footer>
+</body>
+</html>
