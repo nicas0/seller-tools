@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Debt payoff calculator: snowball or avalanche, see when you're debt-free</title>
+<meta name="description" content="Free debt payoff calculator: list your debts, pick the snowball or avalanche method and an extra monthly amount, and see when each debt is paid off, when you're debt-free and the total interest.">
+<link rel="canonical" href="https://nicas0.github.io/seller-tools/tools/debt-payoff-calculator.html">
+<meta property="og:title" content="Debt payoff calculator: snowball or avalanche">
+<meta property="og:description" content="See when each debt is paid off, when you're debt-free and how much interest you'll pay, with the snowball or avalanche method.">
+<meta property="og:url" content="https://nicas0.github.io/seller-tools/tools/debt-payoff-calculator.html">
+<meta property="og:image" content="https://nicas0.github.io/seller-tools/img/share.png">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .calc { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 16px; }
+  .calc label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+  .calc input, .calc select, .debts input { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); width: 100%; }
+  .calc input:focus, .calc select:focus, .debts input:focus { outline: 3px solid var(--green); outline-offset: 1px; }
+  .debts td { padding: 3px 4px; } .debts th { font-size: 14px; }
+  .big { font-size: 30px; font-weight: 800; }
+</style>
+</head>
+<body>
+<header><a href="../index.html">Seller Tools</a><nav><a href="../guides.html">Guides</a></nav></header>
+<main>
+<h1>Debt payoff calculator</h1>
+<p class="lede">List your debts, choose snowball or avalanche, and see when you'll be debt-free. Everything is worked out in your browser; nothing is sent anywhere.</p>
+<div class="card">
+  <div class="calc">
+    <label>Method<select id="method"><option value="snowball">Snowball: smallest balance first</option><option value="avalanche">Avalanche: highest rate first</option></select></label>
+    <label>Extra each month ($)<input id="extra" type="text" inputmode="decimal" value="200.00"></label>
+  </div>
+  <table class="debts" style="margin-top:12px"><tr><th>Debt</th><th>Balance ($)</th><th>Rate (APR %)</th><th>Minimum ($)</th></tr><tbody id="rows"></tbody></table>
+</div>
+<div class="card" aria-live="polite">
+  <p>Debt-free in: <span class="big" id="keep">-</span> <span id="margin" class="lede"></span></p>
+  <p id="targetPrice"></p>
+  <table id="breakdown"></table>
+</div>
+<p class="muted">How it works: your monthly budget stays the same (every minimum plus the extra). Each month every debt gets
+interest (balance &times; APR &divide; 12) and its minimum; what's left goes to the debts in order (snowball: smallest
+balance first; avalanche: highest rate first), so money freed when a debt is paid off moves straight on to the next.
+Lenders may work out interest daily, so real statements can differ a little. Not financial advice.</p>
+<p>Which method is better? <a href="../guides/debt-snowball-vs-avalanche.html">Debt snowball vs avalanche, explained</a>.</p>
+
+</main>
+<footer>Made by nicnak. No tracking, no cookies; this page has no internet access. Not financial advice.</footer>
+<script>
+"use strict";
+(() => {
+  // Same rules as products/sheets-template/debt_sim.py (which the Debt Payoff Planner spreadsheet is checked against).
+  const START = [["Store card", "2500.00", "22.99", "75.00"], ["Credit card", "900.00", "18", "35.00"],
+                 ["Car loan", "8000.00", "6.5", "220.00"], ["Student loan", "12000.00", "4.5", "130.00"], ["", "", "", ""], ["", "", "", ""]];
+  const $ = (id) => document.getElementById(id);
+  START.forEach((row, i) => {
+    const tr = document.createElement("tr");
+    ["name", "bal", "apr", "min"].forEach((k, j) => {
+      const td = document.createElement("td"), el = document.createElement("input");
+      el.type = "text"; el.id = `${k}${i}`; el.value = row[j]; if (j) el.inputMode = "decimal";
+      el.addEventListener("input", calc); td.appendChild(el); tr.appendChild(td);
+    });
+    $("rows").appendChild(tr);
+  });
+  $("method").addEventListener("change", calc); $("extra").addEventListener("input", calc);
+  function cents(s) {
+    s = String(s).trim().replace(/^\$/, "").replace(/,/g, "");
+    if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+    const [w, f = ""] = s.split(".");
+    return Number(w) * 100 + Number((f + "00").slice(0, 2));
+  }
+  // APR like "22.99" -> hundredths of a percent (2299)
+  const hundredths = cents;
+  const money = (c) => (c < 0 ? "-$" : "$") + (Math.abs(c) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  function calc() {
+    const extra = cents($("extra").value), debts = [];
+    let bad = extra === null;
+    START.forEach((_, i) => {
+      const name = $(`name${i}`).value.trim();
+      if (!name) return;
+      const bal = cents($(`bal${i}`).value), apr = hundredths($(`apr${i}`).value), min = cents($(`min${i}`).value);
+      if ([bal, apr, min].some((x) => x === null)) bad = true;
+      else debts.push({ name, bal, apr, min, start: bal, paidOff: null, interest: 0 });
+    });
+    $("breakdown").innerHTML = "";
+    if (bad || !debts.length) {
+      $("keep").textContent = "-"; $("margin").textContent = "";
+      $("targetPrice").textContent = bad ? "Check the numbers: use plain amounts like 2500.00 and rates like 22.99." : "Add at least one debt.";
+      return;
+    }
+    const order = debts.map((d, i) => i).sort((a, b) => $("method").value === "avalanche"
+      ? (debts[b].apr - debts[a].apr) || (a - b) : (debts[a].start - debts[b].start) || (a - b));
+    const budget = debts.reduce((s, d) => s + d.min, 0) + extra;
+    let month = 0;
+    for (month = 1; month <= 360 && debts.some((d) => d.bal > 0); month++) {
+      const owed = debts.map(() => 0), pay = debts.map(() => 0);
+      debts.forEach((d, i) => {
+        if (d.bal <= 0) return;
+        const interest = Math.floor((d.bal * d.apr + 60000) / 120000);   // balance x APR / 12, to the cent
+        d.interest += interest; owed[i] = d.bal + interest; pay[i] = Math.min(owed[i], d.min);
+      });
+      let left = budget - pay.reduce((s, p) => s + p, 0);
+      for (const i of order) { const more = Math.min(left, owed[i] - pay[i]); pay[i] += more; left -= more; }
+      debts.forEach((d, i) => { if (d.bal > 0) { d.bal = owed[i] - pay[i]; if (d.bal === 0) d.paidOff = month; } });
+    }
+    const stuck = debts.filter((d) => d.paidOff === null);
+    const total = debts.reduce((s, d) => s + d.interest, 0);
+    const rows = [["Debt", "Paid off in month", "Interest"]].concat(order.map((i) => [debts[i].name, debts[i].paidOff ?? "over 30 years", money(debts[i].interest)]));
+    rows.forEach((r, k) => {
+      const tr = document.createElement("tr");
+      r.forEach((c, j) => { const td = document.createElement(k ? "td" : "th"); td.textContent = c; if (j) td.className = "num"; tr.appendChild(td); });
+      $("breakdown").appendChild(tr);
+    });
+    if (stuck.length) {
+      $("keep").textContent = "over 30 years"; $("margin").textContent = "";
+      $("targetPrice").textContent = `Raise the extra or the minimums: ${stuck.map((d) => d.name).join(", ")} won't be paid off in 30 years.`;
+      return;
+    }
+    const last = Math.max(...debts.map((d) => d.paidOff));
+    $("keep").textContent = `${last} months`;
+    $("margin").textContent = `(${(Math.round(last / 12 * 10) / 10).toFixed(1)} years)`;
+    $("targetPrice").textContent = `Total interest: ${money(total)}. Monthly budget: ${money(budget)}.`;
+  }
+  calc();
+})();
+</script>
+</body>
+</html>
