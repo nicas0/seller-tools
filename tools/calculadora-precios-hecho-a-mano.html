@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Calculadora de precios para productos hechos a mano: costo, mayoreo y menudeo</title>
+<meta name="description" content="Calculadora gratis de precios para productos hechos a mano: materiales, tu tiempo, empaque y gastos generales dan tu costo, un precio de mayoreo y de menudeo, y tu ganancia después de las comisiones de Etsy.">
+<link rel="canonical" href="https://nicas0.github.io/seller-tools/tools/calculadora-precios-hecho-a-mano.html">
+<meta property="og:title" content="Calculadora de precios para productos hechos a mano">
+<meta property="og:description" content="Materiales, tu tiempo, empaque y gastos generales: tu costo, un precio de mayoreo y de menudeo, y tu ganancia después de las comisiones de Etsy.">
+<meta property="og:url" content="https://nicas0.github.io/seller-tools/tools/calculadora-precios-hecho-a-mano.html">
+<meta property="og:image" content="https://nicas0.github.io/seller-tools/img/share.png">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .calc { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 16px; }
+  .calc label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+  .calc input, .calc select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); }
+  .calc input:focus, .calc select:focus { outline: 3px solid var(--green); outline-offset: 1px; }
+  .big { font-size: 30px; font-weight: 800; }
+</style>
+</head>
+<body>
+<header><a href="../index.html">Seller Tools</a><nav><a href="handmade-pricing-calculator.html">English</a><a href="calculadora-comisiones-etsy.html">Etsy</a></nav></header>
+<main>
+<h1>Calculadora de precios para productos hechos a mano</h1>
+<p class="lede">Pon precio según lo que de verdad te cuesta cada artículo, incluido tu tiempo. Todo se calcula en tu navegador; no se envía nada.</p>
+<div class="card">
+  <div class="calc" id="inputs"></div>
+</div>
+<div class="card" aria-live="polite">
+  <p>Ganancia por venta después de pagarte a ti: <span class="big" id="keep">-</span> <span id="margin" class="lede"></span></p>
+  <table id="breakdown"></table>
+  <p id="targetPrice"></p>
+</div>
+<p class="muted">Mayoreo = costo &times; 2 y menudeo = mayoreo &times; 2 son puntos de partida comunes para productos hechos
+a mano, no reglas: cámbialos según tu mercado. Comisiones de Etsy en EE. UU.: 6.5% de transacción, 3% + $0.25 de
+procesamiento y $0.20 de publicación (revisadas en octubre de 2026), sobre el precio.</p>
+<p>Las comisiones con más detalle: <a href="calculadora-comisiones-etsy.html">calculadora de comisiones de Etsy</a>.
+In English: <a href="handmade-pricing-calculator.html">handmade pricing calculator</a>.</p></main>
+<footer>Hecho por nicnak. Sin rastreo ni cookies; esta página no tiene acceso a internet. No es asesoría contable ni fiscal.</footer>
+<script>
+"use strict";
+(() => {
+  // Same formulas as the Handmade Pricing Calculator spreadsheet (checked in Excel): money in whole cents.
+  const FIELDS = [["materials", "Materiales por artículo ($)", "4.33"], ["packaging", "Empaque por artículo ($)", "0.50"],
+    ["minutes", "Minutos para hacer uno", "6"], ["rate", "Tu tarifa por hora ($)", "20.00"], ["overhead", "Gastos generales (%)", "10"],
+    ["wholesaleX", "Mayoreo = costo x", "2"], ["retailX", "Menudeo = mayoreo x", "2"],
+    ["yourPrice", "Tu precio ($, opcional)", ""], ["fees", "Dónde lo vendes", "etsy"]];
+  const $ = (id) => document.getElementById(id);
+  const box = $("inputs");
+  for (const [id, label, value] of FIELDS) {
+    const l = document.createElement("label"); l.textContent = label;
+    let el;
+    if (id === "fees") {
+      el = document.createElement("select");
+      for (const [v, t] of [["etsy", "Etsy (tarifas de EE. UU.)"], ["none", "Sin comisiones (mercado, efectivo)"]]) el.appendChild(new Option(t, v));
+    } else { el = document.createElement("input"); el.type = "text"; el.inputMode = "decimal"; }
+    el.id = id; el.value = value; el.addEventListener("input", calc); el.addEventListener("change", calc);
+    l.appendChild(el); box.appendChild(l);
+  }
+  function cents(s) {
+    s = String(s).trim().replace(/^\$/, "").replace(/,/g, "");
+    if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+    const [w, f = ""] = s.split(".");
+    return Number(w) * 100 + Number((f + "00").slice(0, 2));
+  }
+  // percentages and multipliers read the same way as money: "10" -> 1000, "2.5" -> 250 (hundredths)
+  const hundredths = cents;
+  const pct = (amount, h) => Math.floor((amount * h + 5000) / 10000);    // amount x h/10000, round half up
+  const times = (amount, h) => Math.floor((amount * h + 50) / 100);     // amount x h/100, round half up
+  const money = (c) => (c < 0 ? "-$" : "$") + (Math.abs(c) / 100).toFixed(2);
+  function calc() {
+    const mat = cents($("materials").value), pack = cents($("packaging").value), rate = cents($("rate").value);
+    const minutes = Number($("minutes").value), oh = hundredths($("overhead").value);
+    const wx = hundredths($("wholesaleX").value), rx = hundredths($("retailX").value);
+    const yp = $("yourPrice").value.trim() === "" ? null : cents($("yourPrice").value);
+    if ([mat, pack, rate, oh, wx, rx].some((x) => x === null) || !(minutes >= 0) || ($("yourPrice").value.trim() !== "" && yp === null)) {
+      $("keep").textContent = "-"; $("margin").textContent = "Revisa los números: usa cantidades como 4.33.";
+      $("breakdown").innerHTML = ""; $("targetPrice").textContent = ""; return;
+    }
+    const labour = Math.floor((minutes * rate + 30) / 60);                 // minutes x hourly rate / 60, to the cent
+    const overhead = pct(mat + pack + labour, oh);                          // overhead % in hundredths of a percent
+    const cost = mat + pack + labour + overhead;
+    const wholesale = times(cost, wx), retail = times(wholesale, rx);
+    const price = yp === null ? retail : yp;
+    const fees = $("fees").value === "etsy" ? pct(price, 650) + pct(price, 300) + 25 + 20 : 0;
+    const keep = price - fees - cost;
+    const rows = [["Materiales", mat], ["Empaque", pack], ["Tu tiempo", labour], ["Gastos generales", overhead], ["Costo de hacerlo", cost],
+                  ["Precio de mayoreo", wholesale], ["Precio de menudeo sugerido", retail],
+                  [yp === null ? "Vendiendo al precio sugerido" : "Vendiendo a tu precio", price], ["Comisiones de Etsy", -fees],
+                  ["Costo de hacerlo", -cost], ["Ganancia después de pagarte", keep]];
+    $("breakdown").innerHTML = "";
+    for (const [t, c] of rows) {
+      const tr = document.createElement("tr"), a = document.createElement("td"), b = document.createElement("td");
+      a.textContent = t; b.textContent = money(c); b.className = "num";
+      if (t === "Costo de hacerlo" && c > 0 || t === "Ganancia después de pagarte") a.style.fontWeight = b.style.fontWeight = "700";
+      tr.append(a, b); $("breakdown").appendChild(tr);
+    }
+    $("keep").textContent = money(keep);
+    $("margin").textContent = price ? `(${(Math.round(keep * 1000 / price) / 10).toFixed(1)}% del precio, además de ${money(labour)} por tu tiempo)` : "";
+    $("targetPrice").textContent = `Precio de menudeo sugerido: ${money(retail)} (mayoreo ${money(wholesale)}).`;
+  }
+  calc();
+})();
+</script>
+</body>
+</html>
