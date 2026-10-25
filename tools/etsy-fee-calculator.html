@@ -36,7 +36,7 @@
 <p class="muted">Etsy US rates: 6.5% transaction, 3% + $0.25 processing, $0.20 listing, Offsite Ads 15% (12% for shops over $10k a year) capped at $100. Fees are rounded per item, so a statement can differ by a cent. Your Etsy statement is the final word.</p>
 <p>Want this for every product, from your real orders? Try the free <a href="../profit-check.html">Profit Check</a>.
 Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> sorts them out.</p>
-<p>Sell somewhere else too? Free fee calculators for <a href="shopify-fee-calculator.html">Shopify</a>, <a href="ebay-fee-calculator.html">eBay</a>, <a href="poshmark-fee-calculator.html">Poshmark</a>, <a href="mercari-fee-calculator.html">Mercari</a> and <a href="depop-fee-calculator.html">Depop</a>.</p>
+<p>Sell somewhere else too? Free fee calculators for <a href="shopify-fee-calculator.html">Shopify</a>, <a href="ebay-fee-calculator.html">eBay</a>, <a href="poshmark-fee-calculator.html">Poshmark</a>, <a href="mercari-fee-calculator.html">Mercari</a>, <a href="depop-fee-calculator.html">Depop</a> and <a href="amazon-fee-calculator.html">Amazon</a>.</p>
 </main>
 <footer>Made by nicnak. No tracking, no cookies; this page has no internet access. Not accounting or tax advice.</footer>
 <script>
@@ -63,6 +63,10 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
     ? [["price", "Item price ($)", "25.00"], ["shipCharged", "Shipping the buyer pays ($)", "5.00"], ["salesTax", "Sales tax the buyer pays ($)", "0.00"],
        ["cost", "What the item cost you ($)", "8.00"], ["label", "Shipping label you pay ($)", "5.00"], ["packaging", "Packaging ($)", "0.00"],
        ["target", "Target margin (%)", "30"]]
+    : PLATFORM === "amazon"
+    ? [["price", "Item price ($)", "20.00"], ["shipCharged", "Shipping you charge ($)", "0.00"], ["cost", "Cost to make or buy ($)", "6.00"],
+       ["label", "Shipping label you pay ($)", "5.00"], ["packaging", "Packaging ($)", "0.00"], ["target", "Target margin (%)", "30"],
+       ["referral", "Referral fee (%)", "15"], ["plan", "Selling plan", "pro"], ["media", "Book, music, video or software?", "no"]]
     : [["price", "Item price ($)", "18.00"], ["shipCharged", "Shipping you charge ($)", "0.00"], ["cost", "Cost to make or buy ($)", "6.50"],
        ["label", "Shipping label you pay ($)", "4.50"], ["packaging", "Packaging ($)", "0.00"], ["target", "Target margin (%)", "30"],
        ["gateway", "Payment provider", "shopify"]];
@@ -71,10 +75,12 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
   for (const [id, label, value] of FIELDS) {
     const l = document.createElement("label"); l.textContent = label;
     let el;
-    if (id === "offsite" || id === "gateway") {
+    if (["offsite", "gateway", "plan", "media"].includes(id)) {
       el = document.createElement("select");
-      const opts = id === "offsite" ? [["no", "No"], ["yes15", "Yes, 15%"], ["yes12", "Yes, 12% (shops over $10k a year)"]]
-                                    : [["shopify", "Shopify Payments"], ["other", "Another provider (+2% on Basic)"]];
+      const opts = { offsite: [["no", "No"], ["yes15", "Yes, 15%"], ["yes12", "Yes, 12% (shops over $10k a year)"]],
+                     gateway: [["shopify", "Shopify Payments"], ["other", "Another provider (+2% on Basic)"]],
+                     plan: [["pro", "Professional ($39.99 a month, not per item)"], ["individual", "Individual ($0.99 per item)"]],
+                     media: [["no", "No"], ["yes", "Yes ($1.80 closing fee)"]] }[id];
       for (const [v, t] of opts) el.appendChild(new Option(t, v));
     } else { el = document.createElement("input"); el.type = "text"; el.inputMode = "decimal"; }
     el.id = id; el.value = value; el.addEventListener("input", calc); el.addEventListener("change", calc);
@@ -96,8 +102,9 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
     const target = Number($("target").value);
     const fvfRate = PLATFORM === "ebay" ? Number($("fvf").value) : 0;
     const procRate = PLATFORM === "mercari" ? Number($("procPct").value) : 0;
+    const refRate = PLATFORM === "amazon" ? Number($("referral").value) : 0;
     if (Object.values(v).some((x) => x === null) || !(target >= 0 && target < 100) || !(fvfRate >= 0 && fvfRate < 100)
-        || !(procRate >= 0 && procRate < 100)) {
+        || !(procRate >= 0 && procRate < 100) || !(refRate >= 0 && refRate < 100)) {
       $("keep").textContent = "-"; $("margin").textContent = "Check the numbers: use plain amounts like 18.00.";
       $("breakdown").innerHTML = ""; $("targetPrice").textContent = ""; return;
     }
@@ -130,6 +137,15 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
       // Depop US: no selling fee; payment processing 3.3% + $0.45 on the whole total, shipping and tax included
       lines.push(["Payment processing (3.3% + $0.45 of the total incl. tax)", pct(paid + v.salesTax, 330) + 45]);
       pctTotal = 330; fixed = 45;  // target price below assumes no sales tax
+    } else if (PLATFORM === "amazon") {
+      // Amazon US, shipped by you: referral fee on the total incl. shipping, at least $0.30 (none for media);
+      // $0.99 per item on the Individual plan; $1.80 closing fee on media
+      const rate = Math.round(refRate * 100), media = $("media").value === "yes", individual = $("plan").value === "individual";
+      lines.push([`Referral fee (${refRate}% of item and shipping${media ? "" : ", at least $0.30"})`,
+                  media ? pct(paid, rate) : Math.max(pct(paid, rate), 30)]);
+      if (individual) lines.push(["Individual plan, per item", 99]);
+      if (media) lines.push(["Closing fee (media)", 180]);
+      pctTotal = rate; fixed = (individual ? 99 : 0) + (media ? 180 : 0);
     } else {
       const other = $("gateway").value === "other" ? 200 : 0;
       lines.push(["Payment processing (2.9% + $0.30)", pct(paid, 290) + 30]);
