@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Sales goal calculator: how many sales you need to make $X a month</title>
+<meta name="description" content="Free sales goal calculator for Etsy, Shopify and other sellers: your profit per sale after fees and costs, and how many sales a month, week and day it takes to reach your income goal.">
+<link rel="canonical" href="https://nicas0.github.io/seller-tools/tools/sales-goal-calculator.html">
+<meta property="og:title" content="Sales goal calculator: how many sales you need to make $X a month">
+<meta property="og:description" content="Your profit per sale after fees and costs, and how many sales a month, week and day it takes to reach your income goal.">
+<meta property="og:url" content="https://nicas0.github.io/seller-tools/tools/sales-goal-calculator.html">
+<meta property="og:image" content="https://nicas0.github.io/seller-tools/img/share.png">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .calc { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 16px; }
+  .calc label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+  .calc input, .calc select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); }
+  .calc input:focus, .calc select:focus { outline: 3px solid var(--green); outline-offset: 1px; }
+  .big { font-size: 30px; font-weight: 800; }
+</style>
+</head>
+<body>
+<header><a href="../index.html">Seller Tools</a><nav><a href="../csv-cleaner.html">CSV Cleaner</a><a href="../profit-check.html">Profit Check</a><a href="../guides.html">Guides</a></nav></header>
+<main>
+<h1>Sales goal calculator</h1>
+<p class="lede">How many sales does it take to make the money you want? Everything is worked out in your browser; nothing is sent anywhere.</p>
+<div class="card">
+  <div class="calc" id="inputs"></div>
+</div>
+<div class="card" aria-live="polite">
+  <p>Sales needed each month: <span class="big" id="keep">-</span> <span id="margin" class="lede"></span></p>
+  <p id="targetPrice"></p>
+  <table id="breakdown"></table>
+</div>
+<p class="muted">Fees: Etsy US 6.5% transaction, 3% + $0.25 processing and $0.20 listing; Shopify Payments Basic plan 2.9% + $0.30
+(checked October 2026). Fixed monthly costs are things you pay whatever you sell: a Shopify plan, software, Etsy Ads
+budget. A week is 12/52 of a month and a day 12/365. Not accounting or tax advice.</p>
+<p>Profit per sale for one product in more detail: the free <a href="etsy-fee-calculator.html">Etsy</a>,
+<a href="shopify-fee-calculator.html">Shopify</a> and <a href="handmade-pricing-calculator.html">handmade pricing</a> calculators.</p>
+
+</main>
+<footer>Made by nicnak. No tracking, no cookies; this page has no internet access. Not accounting or tax advice.</footer>
+<script>
+"use strict";
+(() => {
+  const FIELDS = [["platform", "Where you sell", "etsy"], ["price", "Typical item price ($)", "18.00"],
+    ["shipCharged", "Shipping you charge ($)", "0.00"], ["cost", "Cost to make or buy ($)", "6.50"],
+    ["label", "Shipping label you pay ($)", "4.50"], ["packaging", "Packaging ($)", "0.00"],
+    ["goal", "Profit you want each month ($)", "1000.00"], ["fixed", "Fixed monthly costs ($)", "40.00"]];
+  const $ = (id) => document.getElementById(id);
+  const box = $("inputs");
+  for (const [id, label, value] of FIELDS) {
+    const l = document.createElement("label"); l.textContent = label;
+    let el;
+    if (id === "platform") {
+      el = document.createElement("select");
+      for (const [v, t] of [["etsy", "Etsy"], ["shopify", "Shopify (Shopify Payments)"], ["none", "No fees (cash, markets)"]]) el.appendChild(new Option(t, v));
+    } else { el = document.createElement("input"); el.type = "text"; el.inputMode = "decimal"; }
+    el.id = id; el.value = value; el.addEventListener("input", calc); el.addEventListener("change", calc);
+    l.appendChild(el); box.appendChild(l);
+  }
+  function cents(s) {
+    s = String(s).trim().replace(/^\$/, "").replace(/,/g, "");
+    if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+    const [w, f = ""] = s.split(".");
+    return Number(w) * 100 + Number((f + "00").slice(0, 2));
+  }
+  const pct = (amount, h) => Math.floor((amount * h + 5000) / 10000);
+  const money = (c) => (c < 0 ? "-$" : "$") + (Math.abs(c) / 100).toFixed(2);
+  const one = (x) => (Math.round(x * 10) / 10).toFixed(1);
+  function calc() {
+    const v = {};
+    for (const k of ["price", "shipCharged", "cost", "label", "packaging", "goal", "fixed"]) v[k] = cents($(k).value);
+    $("breakdown").innerHTML = "";
+    if (Object.values(v).some((x) => x === null)) {
+      $("keep").textContent = "-"; $("margin").textContent = ""; $("targetPrice").textContent = "Check the numbers: use plain amounts like 18.00.";
+      return;
+    }
+    const paid = v.price + v.shipCharged, platform = $("platform").value;
+    const fees = platform === "etsy" ? pct(paid, 650) + pct(paid, 300) + 25 + 20 : platform === "shopify" ? pct(paid, 290) + 30 : 0;
+    const perSale = paid - fees - v.cost - v.label - v.packaging, needed = v.goal + v.fixed;
+    const rows = [["Buyer pays", paid], ["Fees", -fees], ["Cost, label and packaging", -(v.cost + v.label + v.packaging)],
+                  ["Profit per sale", perSale], ["Monthly goal plus fixed costs", needed]];
+    for (const [t, c] of rows) {
+      const tr = document.createElement("tr"), a = document.createElement("td"), b = document.createElement("td");
+      a.textContent = t; b.textContent = money(c); b.className = "num";
+      if (t === "Profit per sale") a.style.fontWeight = b.style.fontWeight = "700";
+      tr.append(a, b); $("breakdown").appendChild(tr);
+    }
+    if (perSale <= 0) {
+      $("keep").textContent = "-"; $("margin").textContent = "";
+      $("targetPrice").textContent = `Each sale ${perSale < 0 ? "loses" : "makes"} ${money(Math.abs(perSale))}: raise the price or cut costs first.`;
+      return;
+    }
+    const month = Math.ceil(needed / perSale);   // whole sales, rounded up
+    $("keep").textContent = String(month);
+    $("margin").textContent = `at ${money(perSale)} profit each`;
+    $("targetPrice").textContent = `About ${one(month * 12 / 52)} a week, or ${one(month * 12 / 365)} a day.`;
+  }
+  calc();
+})();
+</script>
+</body>
+</html>
