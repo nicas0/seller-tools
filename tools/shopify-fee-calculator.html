@@ -47,6 +47,10 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
     ? [["price", "Item price ($)", "18.00"], ["shipCharged", "Shipping you charge ($)", "0.00"], ["cost", "Cost to make ($)", "6.50"],
        ["label", "Shipping label you pay ($)", "4.50"], ["packaging", "Packaging ($)", "0.00"], ["target", "Target margin (%)", "30"],
        ["offsite", "Sold through an Offsite Ad?", "no"]]
+    : PLATFORM === "ebay"
+    ? [["price", "Item price ($)", "18.00"], ["shipCharged", "Shipping you charge ($)", "0.00"], ["salesTax", "Sales tax the buyer pays ($)", "0.00"],
+       ["cost", "Cost to make or buy ($)", "6.50"], ["label", "Shipping label you pay ($)", "4.50"], ["packaging", "Packaging ($)", "0.00"],
+       ["target", "Target margin (%)", "30"], ["fvf", "Final value fee (%)", "13.6"]]
     : [["price", "Item price ($)", "18.00"], ["shipCharged", "Shipping you charge ($)", "0.00"], ["cost", "Cost to make or buy ($)", "6.50"],
        ["label", "Shipping label you pay ($)", "4.50"], ["packaging", "Packaging ($)", "0.00"], ["target", "Target margin (%)", "30"],
        ["gateway", "Payment provider", "shopify"]];
@@ -76,8 +80,10 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
   function calc() {
     const v = {};
     for (const k of ["price", "shipCharged", "cost", "label", "packaging"]) v[k] = cents($(k).value);
+    if (PLATFORM === "ebay") v.salesTax = cents($("salesTax").value);
     const target = Number($("target").value);
-    if (Object.values(v).some((x) => x === null) || !(target >= 0 && target < 100)) {
+    const fvfRate = PLATFORM === "ebay" ? Number($("fvf").value) : 0;
+    if (Object.values(v).some((x) => x === null) || !(target >= 0 && target < 100) || !(fvfRate >= 0 && fvfRate < 100)) {
       $("keep").textContent = "-"; $("margin").textContent = "Check the numbers: use plain amounts like 18.00.";
       $("breakdown").innerHTML = ""; $("targetPrice").textContent = ""; return;
     }
@@ -89,6 +95,13 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
                  ["Listing fee (renews when it sells)", 20]);
       if (offsite) lines.push([`Offsite Ads (${offsite / 100}%, capped at $100)`, Math.min(pct(paid, offsite), 10000)]);
       pctTotal = 650 + 300 + offsite; fixed = 45;
+    } else if (PLATFORM === "ebay") {
+      // eBay: the final value fee is on the whole sale including shipping and sales tax (up to $7,500 per item;
+      // 2.35% above that), plus $0.30 per order up to $10.00 or $0.40 above.
+      const rate = Math.round(fvfRate * 100), total = paid + v.salesTax, top = 750000;
+      lines.push([`Final value fee (${fvfRate}% of the sale incl. shipping and tax)`, pct(Math.min(total, top), rate) + pct(Math.max(0, total - top), 235)],
+                 ["Per-order fee", total <= 1000 ? 30 : 40]);
+      pctTotal = rate; fixed = 40;  // target price below assumes no sales tax and an order over $10
     } else {
       const other = $("gateway").value === "other" ? 200 : 0;
       lines.push(["Payment processing (2.9% + $0.30)", pct(paid, 290) + 30]);
@@ -96,7 +109,8 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
       pctTotal = 290 + other; fixed = 30;
     }
     const fees = lines.reduce((a, l) => a + l[1], 0), keep = paid - costs - fees;
-    const rows = [["Buyer pays", paid], ...lines.map(([t, c]) => [t, -c]), ["Your costs (make, label, packaging)", -costs], ["You keep", keep]];
+    const rows = [[PLATFORM === "ebay" && v.salesTax ? "Buyer pays (item and shipping; the tax goes to the state)" : "Buyer pays", paid],
+                  ...lines.map(([t, c]) => [t, -c]), ["Your costs (make, label, packaging)", -costs], ["You keep", keep]];
     $("breakdown").innerHTML = "";
     for (const [t, c] of rows) {
       const tr = document.createElement("tr"), a = document.createElement("td"), b = document.createElement("td");
