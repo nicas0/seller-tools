@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Etsy title and tag checker: 140 characters, 13 tags, 20 characters each</title>
+<meta name="description" content="Free Etsy title and tag checker: paste your listing title and tags to check the 140-character title limit, all 13 tags, the 20-character tag limit, repeats, and title words missing from your tags.">
+<link rel="canonical" href="https://nicas0.github.io/seller-tools/tools/etsy-tag-checker.html">
+<meta property="og:title" content="Etsy title and tag checker: 140 characters, 13 tags, 20 characters each">
+<meta property="og:description" content="Paste your Etsy listing title and tags to check them against Etsy's limits, with repeats and missed words flagged.">
+<meta property="og:url" content="https://nicas0.github.io/seller-tools/tools/etsy-tag-checker.html">
+<meta property="og:image" content="https://nicas0.github.io/seller-tools/img/share.png">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .calc label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+  .calc textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); min-height: 70px; }
+  .calc textarea:focus { outline: 3px solid var(--green); outline-offset: 1px; }
+  .big { font-size: 30px; font-weight: 800; }
+  .bad { color: #b3261e; font-weight: 700; } @media (prefers-color-scheme: dark) { .bad { color: #ff8a80; } }
+</style>
+</head>
+<body>
+<header><a href="../index.html">Seller Tools</a><nav><a href="../csv-cleaner.html">CSV Cleaner</a><a href="../profit-check.html">Profit Check</a><a href="../guides.html">Guides</a></nav></header>
+<main>
+<h1>Etsy title and tag checker</h1>
+<p class="lede">Paste a listing's title and tags to check them against Etsy's limits. Everything is checked in your browser; nothing is sent anywhere.</p>
+<div class="card calc">
+  <label>Listing title<textarea id="title"></textarea></label>
+  <label>Tags, separated by commas<textarea id="tags"></textarea></label>
+</div>
+<div class="card" aria-live="polite">
+  <p>Tags used: <span class="big" id="keep">-</span> <span id="margin" class="lede"></span></p>
+  <p id="targetPrice"></p>
+  <table id="breakdown"></table>
+  <p id="missing"></p>
+</div>
+<p class="muted">Etsy's limits: titles up to 140 characters, up to 13 tags, each up to 20 characters. Using all 13 and
+not repeating a tag gives your listing the most ways to be found. Words in your title that no tag uses are listed as
+ideas, not mistakes. Etsy can change its limits; its listing editor is the final word.</p>
+<p>Know what you keep from each sale too: the free <a href="etsy-fee-calculator.html">Etsy fee calculator</a>.</p>
+</main>
+<footer>Made by nicnak. No tracking, no cookies; this page has no internet access.</footer>
+<script>
+"use strict";
+(() => {
+  const $ = (id) => document.getElementById(id);
+  $("title").value = "Handmade Pricing Calculator Spreadsheet, Product Pricing Template for Makers, Wholesale and Retail, Excel Google Sheets";
+  $("tags").value = "pricing calculator, handmade pricing, product pricing, pricing spreadsheet, wholesale pricing, candle business, " +
+    "soap business, small business excel, maker spreadsheet, cost calculator, etsy seller tools, google sheets seller, craft business";
+  const SMALL = new Set(["a", "an", "and", "the", "for", "of", "to", "in", "on", "with", "or", "by", "your", "my"]);
+  function calc() {
+    const title = $("title").value.trim();
+    const tags = $("tags").value.split(",").map((t) => t.trim()).filter((t) => t);
+    const problems = [];
+    if (title.length > 140) problems.push(`The title is ${title.length} characters; Etsy allows 140.`);
+    if (!title) problems.push("Add a title.");
+    if (tags.length > 13) problems.push(`${tags.length} tags; Etsy allows 13.`);
+    const seen = new Map();
+    $("breakdown").innerHTML = "";
+    tags.forEach((t, i) => {
+      const key = t.toLowerCase();
+      const issue = t.length > 20 ? `${t.length} characters: Etsy allows 20` : seen.has(key) ? `repeats tag ${seen.get(key) + 1}` : "";
+      if (issue) problems.push(`Tag ${i + 1} "${t}": ${issue}.`);
+      if (!seen.has(key)) seen.set(key, i);
+      const tr = document.createElement("tr"), a = document.createElement("td"), b = document.createElement("td");
+      a.textContent = `${i + 1}. ${t}`; b.textContent = issue || `${t.length} characters`; b.className = issue ? "num bad" : "num";
+      tr.append(a, b); $("breakdown").appendChild(tr);
+    });
+    $("keep").textContent = `${Math.min(tags.length, 13)} of 13`;
+    $("margin").textContent = `(title: ${title.length} of 140 characters)`;
+    const spare = 13 - tags.length;
+    $("targetPrice").textContent = problems.length ? `${problems.length} to fix: ${problems.join(" ")}`
+      : spare > 0 ? `No problems found. ${spare} tag${spare === 1 ? "" : "s"} still free: use them all.` : "No problems found.";
+    $("targetPrice").className = problems.length ? "bad" : "";
+    const tagWords = new Set(tags.join(" ").toLowerCase().split(/[^a-z0-9]+/));
+    const missing = [...new Set(title.toLowerCase().split(/[^a-z0-9]+/))].filter((w) => w.length > 2 && !SMALL.has(w) && !tagWords.has(w));
+    $("missing").textContent = missing.length ? `Title words no tag uses (ideas for tags): ${missing.join(", ")}.` : "";
+  }
+  $("title").addEventListener("input", calc); $("tags").addEventListener("input", calc);
+  calc();
+})();
+</script>
+</body>
+</html>
