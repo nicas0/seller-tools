@@ -171,7 +171,8 @@ const Cleaner = (() => {
       if (ch === delim) { row.push(field); field = ""; atStart = true; i++; continue; }
       if (ch === "\r" || ch === "\n") {
         row.push(field); rows.push(row); row = []; field = ""; atStart = true;
-        i += (ch === "\r" && text[i + 1] === "\n") ? 2 : 1;
+        // "\r\r\n" is one line break written twice over (a Windows file converted again), never an empty row
+        i += (ch === "\r" && text[i + 1] === "\r" && text[i + 2] === "\n") ? 3 : (ch === "\r" && text[i + 1] === "\n") ? 2 : 1;
         continue;
       }
       field += ch; atStart = false; i++;
