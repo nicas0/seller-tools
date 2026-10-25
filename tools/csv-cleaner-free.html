@@ -529,7 +529,9 @@ const Cleaner = (() => {
   function show(id, on = true) { $(id).classList.toggle("hidden", !on); }
   function msg(where, kind, text) { $(where).innerHTML = ""; const d = document.createElement("div"); d.className = "note " + kind; d.textContent = text; $(where).appendChild(d); }
   function save(name, text) {
-    const url = URL.createObjectURL(new Blob([text], { type: name.endsWith(".csv") ? "text/csv;charset=utf-8" : "text/plain;charset=utf-8" }));
+    // Excel on Windows reads a CSV as UTF-8 only if it starts with a byte-order mark; without one,
+    // "Montréal" opens as "MontrÃ©al" (checked in Excel). Text files get one too, for Notepad's sake.
+    const url = URL.createObjectURL(new Blob(["﻿" + text], { type: name.endsWith(".csv") ? "text/csv;charset=utf-8" : "text/plain;charset=utf-8" }));
     const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   }

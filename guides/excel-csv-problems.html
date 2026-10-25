@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'none'; form-action 'none'; base-uri 'self'">
+<title>Excel shows #####, Ã© or drops leading zeros in a CSV export: fixes</title>
+<meta name="description" content="Three common problems opening Etsy or Shopify CSV exports in Excel: ##### in a column, accented letters turned into strange characters, and ZIP codes or SKUs losing their leading zeros. What causes each and how to fix it.">
+<link rel="canonical" href="https://nicas0.github.io/seller-tools/guides/excel-csv-problems.html">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header><a href="../index.html">Seller Tools</a><nav><a href="../csv-cleaner.html">CSV Cleaner</a><a href="../profit-check.html">Profit Check</a><a href="../guides.html">Guides</a></nav></header>
+<main>
+
+<h1>Excel and CSV exports: #####, strange characters and lost zeros</h1>
+<h2>##### in a column</h2>
+<p>Nothing is wrong with the data: the column is too narrow for the date or number. Double-click the line between
+the column letters at the top to widen it.</p>
+<h2>"Montréal" shows as "MontrÃ©al"</h2>
+<p>The file is UTF-8 (normal for exports), but Excel on Windows opens a CSV as UTF-8 only if the file starts with a
+small marker called a byte-order mark. Without it, accented letters turn into pairs of strange characters.</p>
+<p>To open it correctly: in Excel, use Data &gt; From Text/CSV, choose the file, and set File Origin to
+"65001: Unicode (UTF-8)" before loading. Opening it in Google Sheets also reads it correctly.</p>
+<h2>ZIP codes and SKUs lose their leading zeros</h2>
+<p>When Excel opens a CSV directly, it turns 02134 into the number 2134 (and long numbers into 1.23E+15). The file
+itself is fine; Excel changes it on screen, and saving from Excel makes the change permanent. Import with Data &gt;
+From Text/CSV and set those columns to Text, or open the file in Google Sheets.</p>
+<h2>Files from the CSV Cleaner</h2>
+<p>The <a href="../csv-cleaner.html">CSV Cleaner</a> keeps every value exactly as text and saves its files with the
+byte-order mark, so accented letters open correctly in Excel. Leading zeros are kept in the file; to see them in
+Excel, still import those columns as Text.</p>
+<p><a class="cta" href="../tools/csv-cleaner-free.html">Try it free (up to 50 rows)</a></p>
+
+</main>
+<footer>Made by nicnak. These pages have no tracking and no cookies, and the tools have no internet access: files you drop
+in never leave your computer. Not accounting or tax advice.</footer>
+</body>
+</html>

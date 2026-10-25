@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'none'; form-action 'none'; base-uri 'self'">
+<title>Why your Shopify orders export totals look wrong, and how to add them up</title>
+<meta name="description" content="In a Shopify orders export, the Total is only on an order&#x27;s first row. Summing it works; filling it down or counting rows doesn&#x27;t. How to count orders, items and revenue correctly in Excel.">
+<link rel="canonical" href="https://nicas0.github.io/seller-tools/guides/shopify-export-totals.html">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header><a href="../index.html">Seller Tools</a><nav><a href="../csv-cleaner.html">CSV Cleaner</a><a href="../profit-check.html">Profit Check</a><a href="../guides.html">Guides</a></nav></header>
+<main>
+
+<h1>Why your Shopify export totals look wrong</h1>
+<p class="lede">Shopify's orders export has one row per item, but order amounts (Total, Subtotal, Shipping, Taxes,
+Discount Amount) appear only on each order's first row. That's why some quick sums come out wrong.</p>
+<h2>What to add up</h2>
+<ul><li><b>Revenue:</b> sum the Total column as exported. The blanks on item rows are correct: each order's total
+is counted once.</li>
+<li><b>Number of orders:</b> count the different order numbers (the Name column, like #1001), not the rows. A
+3-item order has 3 rows. In Excel: <kbd>=SUMPRODUCT(1/COUNTIF(A2:A500,A2:A500))</kbd> on the Name column (no
+blank cells in that range).</li>
+<li><b>Items sold:</b> sum Lineitem quantity.</li></ul>
+<h2>What makes totals wrong</h2>
+<ul><li>Filling the blank cells of the Total column with the order's total (copying it down) makes a 3-item order
+count three times. Fill down only details like email, date and city.</li>
+<li>Adding Lineitem price without multiplying by Lineitem quantity undercounts items bought more than once.</li>
+<li>Lineitem price x quantity is before the order's discounts, shipping and tax, so it won't match Total.</li></ul>
+<p>The free <a href="../csv-cleaner.html">CSV Cleaner</a> makes a one-row-per-order summary that counts each total
+once and adds up quantities for you, and its fill-down leaves money columns alone.</p>
+<p><a class="cta" href="../tools/csv-cleaner-free.html">Try it free (up to 50 rows)</a></p>
+
+</main>
+<footer>Made by nicnak. These pages have no tracking and no cookies, and the tools have no internet access: files you drop
+in never leave your computer. Not accounting or tax advice.</footer>
+</body>
+</html>

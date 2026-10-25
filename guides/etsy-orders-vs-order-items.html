@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'none'; form-action 'none'; base-uri 'self'">
+<title>Etsy Orders CSV vs Order Items CSV: which one to download</title>
+<meta name="description" content="Etsy offers two order downloads: Orders (one row per order) and Order Items (one row per item sold). Where to find them and which to use for totals, products and profit.">
+<link rel="canonical" href="https://nicas0.github.io/seller-tools/guides/etsy-orders-vs-order-items.html">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header><a href="../index.html">Seller Tools</a><nav><a href="../csv-cleaner.html">CSV Cleaner</a><a href="../profit-check.html">Profit Check</a><a href="../guides.html">Guides</a></nav></header>
+<main>
+
+<h1>Etsy's Orders CSV vs Order Items CSV</h1>
+<p class="lede">Etsy lets you download your sales as two different files. Picking the right one saves a lot of
+spreadsheet work.</p>
+<h2>Where to find them</h2>
+<p>Shop Manager &gt; Settings &gt; Options &gt; Download Data. Under Orders, choose the type (Orders or Order Items),
+the month and the year, then download the CSV.</p>
+<h2>Orders: one row per order</h2>
+<p>Each row is a whole order: sale date, order ID, buyer, number of items, order value, discounts, shipping, sales
+tax and order total. Use it for monthly totals and for matching payments.</p>
+<h2>Order Items: one row per item sold</h2>
+<p>Each row is one item in an order: item name, quantity, price, item total, transaction ID, listing ID and SKU, with
+the order ID repeated on each of an order's rows. Use it for which products sell and what each one earns. A 3-item
+order appears 3 times here; that's not a duplicate.</p>
+<h2>Profit per product</h2>
+<p>The free <a href="../profit-check.html">Profit Check</a> reads the Order Items file, takes off discounts, estimates
+Etsy's fees from rates you can change, and shows profit per product and per month once you add your costs.</p>
+<p><a class="cta" href="../tools/profit-check-free.html">Try it free (up to 50 rows)</a></p>
+
+</main>
+<footer>Made by nicnak. These pages have no tracking and no cookies, and the tools have no internet access: files you drop
+in never leave your computer. Not accounting or tax advice.</footer>
+</body>
+</html>
