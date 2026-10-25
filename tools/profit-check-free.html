@@ -1,0 +1,916 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- No network at all: the browser blocks every connection, so your data can't leave this computer. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Profit Check (free, 50 rows)</title>
+<style>
+  :root { --ink:#1c2722; --muted:#5f6c65; --line:#d5ddd8; --bg:#f6f8f5; --card:#fff; --green:#1c7a4f; --green-soft:#e3f2ea;
+          --warn:#8a5a00; --warn-soft:#fff3cd; --bad:#b3362d; --bad-soft:#fde4e1; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#e7eee9; --muted:#a7b4ad; --line:#34413a; --bg:#121815; --card:#1a221e;
+          --green:#4cc38a; --green-soft:#183427; --warn:#f0c36b; --warn-soft:#3a3020; --bad:#ff8a80; --bad-soft:#3d2422; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; color:var(--ink); background:var(--bg); }
+  main { max-width: 960px; margin: 0 auto; padding: 28px 18px 60px; }
+  h1 { font-size: 30px; margin: 0 0 4px; } h2 { font-size: 19px; margin: 0 0 10px; }
+  .lede { color: var(--muted); margin: 0 0 22px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; }
+  .step { display:inline-block; width:26px; height:26px; border-radius:50%; background:var(--green); color:#fff; text-align:center; font-weight:700; margin-right:8px; line-height:26px; font-size:14px; }
+  .drop { display:block; border:2px dashed var(--line); border-radius:10px; padding:26px; text-align:center; cursor:pointer; }
+  .drop.over { border-color: var(--green); background: var(--green-soft); }
+  .drop input { display:none; }
+  table { border-collapse: collapse; width: 100%; } th, td { text-align:left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 13px; color: var(--muted); font-weight: 600; } td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.neg { color: var(--bad); font-weight: 600; }
+  input[type=text], select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
+  input.money { width: 7.5em; text-align: right; }
+  button { font: inherit; font-weight: 600; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--green); background: var(--green); color: #fff; cursor: pointer; margin: 4px 8px 4px 0; }
+  button.secondary { background: transparent; color: var(--green); }
+  .note { padding: 10px 12px; border-radius: 8px; margin: 10px 0; }
+  .note.ok { background: var(--green-soft); } .note.warn { background: var(--warn-soft); } .note.bad { background: var(--bad-soft); }
+  .muted { color: var(--muted); font-size: 14px; } .hidden { display: none; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 16px; align-items: end; }
+  .grid label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 10px 0 16px; }
+  .tile { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .tile b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; } .tile span { font-size: 13px; color: var(--muted); }
+  .scroll { overflow-x: auto; }
+  .lock { font-size: 13px; color: var(--muted); }
+  a { color: var(--green); font-weight: 600; }
+  @media (max-width: 480px) { th, td { padding: 6px 4px; } .card { padding: 14px 12px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Profit Check</h1>
+  <p class="lede">See what you actually kept from each product and each month: revenue, minus what the products cost you, the fees and the shipping you paid. Works with Shopify, Etsy and Amazon order exports.</p>
+  <p class="lock">🔒 Works offline. Your file never leaves this computer: this page has no internet access at all.</p>
+
+  <section class="card">
+    <h2><span class="step">1</span>Choose your order export</h2>
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept=".csv,.txt,.tsv,text/csv">
+      <strong>Drop your orders file here</strong> or click to choose one<br>
+      <span class="muted">Shopify: Orders &gt; Export. Etsy: Settings &gt; Options &gt; Download Data &gt; Order Items. Amazon: Orders &gt; Order Reports.</span>
+    </label>
+    <div id="loadMsg"></div>
+  </section>
+
+  <section class="card hidden" id="mapCard">
+    <h2><span class="step">2</span>Check the columns</h2>
+    <p class="muted" id="mapWhy"></p>
+    <div class="grid" id="mapGrid"></div>
+    <p class="muted" style="margin-top:12px">First rows, as they'll be counted (check that the revenue looks right):</p>
+    <div class="scroll"><table><thead><tr><th>Order</th><th>Product</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Revenue</th></tr></thead><tbody id="preview"></tbody></table></div>
+  </section>
+
+  <section class="card hidden" id="costCard">
+    <h2><span class="step">3</span>What each product costs you</h2>
+    <p class="muted">Type what one unit costs you to make or buy (materials, packaging). Leave a box empty if you don't know yet; it'll be listed. Save your costs to a file so next month you just load them.</p>
+    <button class="secondary" id="saveCosts">Save costs to a file</button>
+    <label class="secondary" style="display:inline-block"><button class="secondary" id="loadCostsBtn" type="button">Load costs from a file</button><input type="file" id="costsFile" accept=".csv,text/csv" class="hidden"></label>
+    <div id="costMsg"></div>
+    <div class="scroll"><table><thead><tr><th>Product</th><th class="num">Units sold</th><th class="num">Cost per unit</th></tr></thead><tbody id="costs"></tbody></table></div>
+  </section>
+
+  <section class="card hidden" id="feeCard">
+    <h2><span class="step">4</span>Fees and shipping</h2>
+    <p class="muted" id="feeNote"></p>
+    <div class="grid">
+      <label>Fee, % of what the buyer paid for items<input type="text" id="pct" class="money"></label>
+      <label>Fee per order ($)<input type="text" id="perOrder" class="money"></label>
+      <label>Fee per item sold ($)<input type="text" id="perItem" class="money"></label>
+      <label>Shipping you pay per order ($)<input type="text" id="ship" class="money" value="0.00"></label>
+    </div>
+    <p class="muted">Fees are an estimate from these rates; your platform's statement has the exact amounts. Revenue here is what buyers paid for the items, after discounts and refunds in the file; shipping charged to buyers and sales tax aren't counted as revenue.</p>
+    <button id="go">Show my profit</button>
+  </section>
+
+  <section class="card hidden" id="resultCard">
+    <h2>Your profit</h2>
+    <div id="warnings"></div>
+    <div class="tiles" id="tiles"></div>
+    <h2>By product</h2>
+    <div class="scroll"><table><thead><tr><th>Product</th><th class="num">Units</th><th class="num">Revenue</th><th class="num">Cost</th><th class="num">Fees</th><th class="num">Shipping</th><th class="num">Profit</th><th class="num">Margin</th></tr></thead><tbody id="byProduct"></tbody></table></div>
+    <h2 style="margin-top:18px">By month</h2>
+    <div class="scroll"><table><thead><tr><th>Month</th><th class="num">Orders</th><th class="num">Revenue</th><th class="num">Profit</th><th class="num">Margin</th></tr></thead><tbody id="byMonth"></tbody></table></div>
+    <p style="margin-top:14px">
+      <button id="dlProducts">Download by product</button><button class="secondary" id="dlMonths">Download by month</button><button class="secondary" id="dlOrders">Download by order</button>
+    </p>
+  </section>
+  <p class="muted hidden" id="upgrade">This is the free version (up to 50 rows). <a id="upgradeLink" target="_blank" rel="noopener noreferrer">Get the full version</a> for files up to 20 MB.</p>
+</main>
+<script>
+// CSV Cleaner engine: the same rules as Mint's tested Python cleanup tool (mint/csv_cleanup.py), which
+// gives the same cleaned file. This self-serve version also accepts what the Python one stops for a
+// person to review: UTF-16 files, empty lines at the end, Excel's unnamed empty columns at the end, and
+// line breaks inside a value. Every row is kept in order and no data value changes, unless the user opts
+// in. Anything ignored is named in the change log. Runs entirely in the browser; nothing is sent anywhere.
+"use strict";
+
+const Cleaner = (() => {
+  const MAX_BYTES = 20 * 1024 * 1024;
+  const MAX_ROWS = 100000;
+  const MAX_COLS = 100;
+  const PLAIN_NEGATIVE = /^-(\d+|\d{1,3}(,\d{3})+)(\.\d+)?$/;
+  const RISKY_START = ["=", "+", "-", "@", "＝", "＋", "－", "＠"];
+
+  class CleanError extends Error {}
+
+  function decode(bytes) {
+    if (bytes.length > MAX_BYTES) throw new CleanError("The file is larger than 20 MB.");
+    // Excel's "Unicode Text" and some apps write UTF-16, always with a byte-order mark.
+    if (bytes[0] === 0xff && bytes[1] === 0xfe) return { text: new TextDecoder("utf-16le").decode(bytes.subarray(2)), encoding: "UTF-16", bom: true };
+    if (bytes[0] === 0xfe && bytes[1] === 0xff) return { text: new TextDecoder("utf-16be").decode(bytes.subarray(2)), encoding: "UTF-16", bom: true };
+    let start = 0;
+    if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) start = 3;
+    const body = bytes.subarray(start);
+    try {
+      return { text: new TextDecoder("utf-8", { fatal: true }).decode(body), encoding: "UTF-8", bom: start === 3 };
+    } catch (e) {
+      // Common for files saved by older Excel versions. Read as Windows-1252 and say so.
+      return { text: new TextDecoder("windows-1252").decode(body), encoding: "Windows-1252", bom: false };
+    }
+  }
+
+  function detectDelimiter(text) {
+    const counts = { ",": 0, ";": 0, "\t": 0 };
+    let quoted = false;
+    for (const ch of text) {
+      if (ch === '"') quoted = !quoted;
+      else if (!quoted && (ch === "\n" || ch === "\r")) break;
+      else if (!quoted && ch in counts) counts[ch]++;
+    }
+    const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    return best[1] > 0 ? best[0] : ",";
+  }
+
+  // RFC 4180 parsing, strict about broken quotes so nothing is silently misread.
+  function parse(text, delim) {
+    const rows = [];
+    let row = [], field = "", i = 0, quoted = false, atStart = true;
+    const n = text.length;
+    while (i < n) {
+      const ch = text[i];
+      if (quoted) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+          quoted = false; i++;
+          const next = text[i];
+          if (i < n && next !== delim && next !== "\n" && next !== "\r") {
+            throw new CleanError(`Row ${rows.length + 1} has a quote in an unexpected place.`);
+          }
+          continue;
+        }
+        field += ch; i++; continue;
+      }
+      if (ch === '"' && atStart) { quoted = true; atStart = false; i++; continue; }
+      if (ch === '"') throw new CleanError(`Row ${rows.length + 1} has a quote in an unexpected place.`);
+      if (ch === delim) { row.push(field); field = ""; atStart = true; i++; continue; }
+      if (ch === "\r" || ch === "\n") {
+        row.push(field); rows.push(row); row = []; field = ""; atStart = true;
+        i += (ch === "\r" && text[i + 1] === "\n") ? 2 : 1;
+        continue;
+      }
+      field += ch; atStart = false; i++;
+    }
+    if (quoted) throw new CleanError("The file ends inside a quoted value (an opening quote is never closed).");
+    if (field !== "" || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  // A cell a spreadsheet could run: one that starts (after spaces or line breaks) with =, +, -, @ (or their
+  // full-width forms), a tab or a carriage return. A line break inside a note is ordinary text.
+  function isRisky(value) {
+    const probe = value.replace(/^[ \n﻿]+/, "");
+    if (probe.startsWith("\t") || probe.startsWith("\r")) return true;
+    if (PLAIN_NEGATIVE.test(probe.replace(/ +$/, ""))) return false;
+    return RISKY_START.some((s) => probe.startsWith(s));
+  }
+
+  function columnLetters(n) {
+    let s = "";
+    while (n) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+    return s;
+  }
+
+  // Reads and checks a file. Returns everything the page needs to ask the user for choices.
+  function load(bytes) {
+    const { text, encoding, bom } = decode(bytes);
+    const delim = detectDelimiter(text);
+    let rows = parse(text, delim);
+    const blankLine = (r) => r.length === 1 && r[0] === "";
+    let emptyLinesAtEnd = 0;
+    while (rows.length > 1 && blankLine(rows[rows.length - 1])) { rows.pop(); emptyLinesAtEnd++; }
+    if (!rows.length || blankLine(rows[0])) throw new CleanError("The file is empty (or its first line is).");
+    let width = rows[0].length;
+    if (width < 1 || width > MAX_COLS) throw new CleanError(`Expected a header row with 1 to ${MAX_COLS} columns.`);
+    if (rows.length - 1 > MAX_ROWS) throw new CleanError(`The file has more than ${MAX_ROWS.toLocaleString()} rows.`);
+    const emptyRows = [];
+    rows.forEach((r, i) => { if (width > 1 && blankLine(r)) emptyRows.push(i + 1); });
+    if (emptyRows.length) {
+      throw new CleanError(`Row${emptyRows.length > 1 ? "s" : ""} ${emptyRows.slice(0, 10).join(", ")}${emptyRows.length > 10 ? " and more" : ""} ` +
+        `${emptyRows.length > 1 ? "are" : "is"} completely empty. Delete empty rows in the middle of the file (in your spreadsheet) ` +
+        "and try again; empty lines at the end are fine. Nothing was changed.");
+    }
+    const uneven = [];
+    rows.forEach((r, i) => { if (r.length !== width) uneven.push(i + 1); });
+    if (uneven.length) {
+      throw new CleanError(`Row${uneven.length > 1 ? "s" : ""} ${uneven.slice(0, 10).join(", ")}${uneven.length > 10 ? " and more" : ""} ` +
+        `ha${uneven.length > 1 ? "ve" : "s"} a different number of columns from the header. Nothing was changed.`);
+    }
+    // Excel often saves stray formatted cells as unnamed, empty columns at the end (Name,Total,,). Those
+    // hold nothing, so they're left out and named in the change log. One with any value is kept and must
+    // be named.
+    let emptyColumnsAtEnd = 0;
+    const emptyColumn = (c) => rows.every((r, i) => (i === 0 ? r[c].trim() : r[c]) === "");  // a cell of spaces isn't empty
+    while (width - emptyColumnsAtEnd > 1 && emptyColumn(width - emptyColumnsAtEnd - 1)) emptyColumnsAtEnd++;
+    if (emptyColumnsAtEnd) { rows = rows.map((r) => r.slice(0, width - emptyColumnsAtEnd)); width -= emptyColumnsAtEnd; }
+    const trimmed = rows[0].map((h) => h.trim());
+    const unnamed = trimmed.map((h, i) => (h ? "" : columnLetters(i + 1))).filter(Boolean);
+    if (unnamed.length) {
+      throw new CleanError(`Column${unnamed.length > 1 ? "s" : ""} ${unnamed.join(", ")} ${unnamed.length > 1 ? "have" : "has"} values ` +
+        "but no name in the header row. Give each column a name in your spreadsheet and try again.");
+    }
+    if (new Set(trimmed.map((h) => h.toLowerCase())).size !== width) throw new CleanError("Two columns have the same name.");
+    const risky = [];
+    rows.forEach((r, i) => r.forEach((v, c) => { if (isRisky(v)) risky.push({ row: i + 1, col: c + 1, letter: columnLetters(c + 1) }); }));
+    return { rows, delim, encoding, bom, headers: trimmed, original: rows[0], width, risky, emptyLinesAtEnd, emptyColumnsAtEnd };
+  }
+
+  function csvField(v, delim) {
+    return (v.includes(delim) || v.includes('"') || v.includes("\r") || v.includes("\n")) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+
+  function toCSV(rows, delim) {
+    return rows.map((r) => r.map((v) => csvField(v, delim)).join(delim)).join("\r\n") + "\r\n";
+  }
+
+  // options: { names: [new header per column], key: [column indexes], neutralize: bool }
+  function clean(loaded, options = {}) {
+    const { rows, width, original } = loaded;
+    const trimmed = loaded.headers;
+    const names = (options.names || trimmed).map((h, i) => (h || "").trim() || trimmed[i]);
+    if (names.length !== width) throw new CleanError("Give one name per column.");
+    if (new Set(names.map((h) => h.toLowerCase())).size !== width) throw new CleanError("Two columns would end up with the same name.");
+    if (names.some((h) => RISKY_START.slice(0, 4).some((s) => h.startsWith(s)))) throw new CleanError("A column name can't start with =, +, - or @.");
+    const renamed = [];
+    names.forEach((h, i) => { if (h !== trimmed[i]) renamed.push({ column: i + 1, from: trimmed[i], to: h }); });
+    const data = rows.slice(1).map((r) => r.slice());
+    let neutralized = 0;
+    if (options.neutralize) {
+      for (const cell of loaded.risky) {
+        if (cell.row === 1) continue;
+        data[cell.row - 2][cell.col - 1] = "'" + data[cell.row - 2][cell.col - 1];
+        neutralized++;
+      }
+    }
+    // Fill-down (opt-in): a blank cell in a chosen column gets the value from an earlier row of the SAME
+    // order. Never overwrites a value, never crosses orders, never fills rows without an order number.
+    const fill = options.fill && options.fill.columns && options.fill.columns.length ? options.fill : null;
+    const before = data.map((r) => r.slice());
+    const filled = {};
+    let filledTotal = 0, fillOrder = null;
+    if (fill) {
+      const oc = fill.order;
+      if (!(Number.isInteger(oc) && oc >= 0 && oc < width)) throw new CleanError("Choose the column with the order number.");
+      const cols = [...new Set(fill.columns)].filter((c) => Number.isInteger(c) && c >= 0 && c < width && c !== oc);
+      fillOrder = names[oc];
+      const known = new Map();
+      for (const r of data) {
+        if (r[oc] === "") continue;
+        if (!known.has(r[oc])) known.set(r[oc], {});
+        const k = known.get(r[oc]);
+        for (const c of cols) {
+          if (r[c] === "") {
+            if (k[c] !== undefined) { r[c] = k[c]; filled[names[c]] = (filled[names[c]] || 0) + 1; filledTotal++; }
+          } else if (k[c] === undefined) k[c] = r[c];
+        }
+      }
+    }
+    const repeats = [], seen = new Map();
+    rows.slice(1).forEach((r, i) => {
+      const k = JSON.stringify(r);
+      if (seen.has(k)) repeats.push({ record: i + 2, matches: seen.get(k) });
+      else seen.set(k, i + 2);
+    });
+    const key = (options.key || []).filter((c) => c >= 0 && c < width);
+    const sameKey = [];
+    if (key.length) {
+      const first = new Map();
+      rows.slice(1).forEach((r, i) => {
+        const k = JSON.stringify(key.map((c) => r[c]));
+        if (first.has(k)) {
+          const prev = rows[first.get(k) - 1];
+          // a cell blank on one row only (an export's item rows) isn't a disagreement; say so separately
+          const differs = names.filter((_, c) => prev[c] !== r[c] && prev[c] !== "" && r[c] !== "");
+          const blank = names.filter((_, c) => prev[c] !== r[c] && (prev[c] === "" || r[c] === ""));
+          if (differs.length || blank.length) sameKey.push({ record: i + 2, matches: first.get(k), differs, blank });
+        } else first.set(k, i + 2);
+      });
+    }
+    const out = [names].concat(data);
+    const report = {
+      rows: rows.length - 1, columns: width, encoding: loaded.encoding, delimiter: loaded.delim,
+      trimmedColumns: original.map((h, i) => (h !== trimmed[i] ? i + 1 : 0)).filter(Boolean),
+      sentNames: trimmed, renamed, key: key.map((c) => names[c]), repeats, sameKey,
+      blanks: data.reduce((s, r) => s + r.filter((v) => v === "").length, 0),
+      risky: loaded.risky.filter((x) => x.row > 1), neutralized, filled, filledTotal, fillOrder,
+      emptyLinesAtEnd: loaded.emptyLinesAtEnd || 0, emptyColumnsAtEnd: loaded.emptyColumnsAtEnd || 0,
+    };
+    // Verification. The file must read back exactly as built, and every cell that differs from the input
+    // must be either a neutralized cell the user chose, or a blank filled from an earlier row of the same
+    // order. Anything else means a value changed that shouldn't have, and nothing is saved.
+    const fail = () => { throw new CleanError("Verification failed: a value changed. Nothing was saved."); };
+    const back = parse(toCSV(out, loaded.delim), loaded.delim);
+    for (let i = 0; i < out.length; i++) if (JSON.stringify(back[i]) !== JSON.stringify(out[i])) fail();
+    const seenFirst = new Map();
+    let changes = 0;
+    rows.slice(1).forEach((orig, i) => {
+      const id = fill ? before[i][fill.order] : "";
+      orig.forEach((v, c) => {
+        const now = data[i][c];
+        if (now !== v) {
+          changes++;
+          const neutral = options.neutralize && now === "'" + v;
+          const fromOrder = fill && v === "" && before[i][c] === "" && id !== "" && seenFirst.get(id + "\u0000" + c) === now;
+          if (!neutral && !fromOrder) fail();
+        }
+        if (fill && id !== "" && before[i][c] !== "" && !seenFirst.has(id + "\u0000" + c)) seenFirst.set(id + "\u0000" + c, before[i][c]);
+      });
+    });
+    if (changes !== neutralized + filledTotal) fail();
+    return { csv: toCSV(out, loaded.delim), report, names };
+  }
+
+  // "different: Total" and/or "blank on one of the two rows: Email"; mint/csv_cleanup.py words it the same.
+  function sameKeyDetail(d) {
+    const parts = (d.differs.length ? [`different: ${d.differs.join(", ")}`] : [])
+      .concat(d.blank.length ? [`blank on one of the two rows: ${d.blank.join(", ")}`] : []);
+    return d.differs.length ? parts.join("; ") : "otherwise the same, except " + parts[0];
+  }
+
+  function changeLog(r) {
+    const L = ["What changed in your file", "",
+      `- ${r.rows} rows and ${r.columns} columns. Every row is still there, in the same order.`];
+    if (r.filledTotal) {
+      L.push(`- Filled in ${r.filledTotal} blank cell(s) on item rows with the order's own details, copied from an earlier row ` +
+        `with the same ${r.fillOrder}: ` + Object.entries(r.filled).map(([c, n]) => `${c} (${n})`).join(", ") +
+        ". Nothing was invented, and no cell that already had a value was changed.");
+    }
+    if (r.neutralized) L.push(`- ${r.neutralized} cell(s) that could run as spreadsheet formulas now start with an apostrophe ('), as you chose.`);
+    L.push(r.filledTotal || r.neutralized ? "- No other values were changed, and nothing was deleted."
+      : "- No values in your data were changed, filled in or deleted.");
+    if (r.encoding !== "UTF-8") L.push(`- The file was read as ${r.encoding} and saved as UTF-8 so accented letters stay correct.`);
+    if (r.emptyLinesAtEnd) L.push(`- Left out ${r.emptyLinesAtEnd} empty line(s) at the end of the file (no data in them).`);
+    if (r.emptyColumnsAtEnd) L.push(`- Left out ${r.emptyColumnsAtEnd} empty column(s) at the end of the file: no name and no values ` +
+      "(spreadsheets often save these by accident).");
+    if (r.trimmedColumns.length) L.push("- Removed extra spaces around these column headers: " + r.trimmedColumns.map((c) => `"${r.sentNames[c - 1]}"`).join(", ") + ".");
+    for (const x of r.renamed) L.push(`- Renamed column ${x.column} from "${x.from}" to "${x.to}".`);
+    if (r.repeats.length) {
+      L.push(`- ${r.repeats.length} row(s) are exact repeats of an earlier row. They're kept and listed so you can decide:`);
+      for (const d of r.repeats) L.push(`  - Row ${d.record} repeats row ${d.matches}`);
+    } else L.push("- No exact repeated rows found.");
+    if (r.key.length) {
+      const rule = r.key.join(", ");
+      if (r.sameKey.length) {
+        L.push(`- ${r.sameKey.length} row(s) share the same ${rule} as an earlier row but differ elsewhere. Kept and listed for you to check:`);
+        for (const d of r.sameKey) L.push(`  - Row ${d.record} has the same ${rule} as row ${d.matches}; ${sameKeyDetail(d)}`);
+      } else L.push(`- No other rows share the same ${rule}.`);
+    }
+    if (r.risky.length && !r.neutralized) {
+      L.push(`- ${r.risky.length} cell(s) start with =, +, - or @ and could run as formulas in a spreadsheet: ` +
+        r.risky.slice(0, 20).map((x) => `row ${x.row} column ${x.letter}`).join("; ") + (r.risky.length > 20 ? " and more" : "") + ". Left unchanged.");
+    }
+    L.push(`- ${r.blanks} blank cell(s) were left blank (nothing was invented).`, "",
+      "Row numbers count the header as row 1, the same as a spreadsheet.", "",
+      "Tip: if Excel shows ##### in a column, the column is just too narrow. Double-click the line between the column " +
+      "letters to widen it. Excel may also show 37.6 for 37.60; the file keeps the full value.");
+    return L.join("\r\n") + "\r\n";
+  }
+
+  // For one-row-per-item exports: which columns look like order details (filled on an order's first row,
+  // blank on its other rows). Money columns are reported separately and not suggested, because copying
+  // an order's total onto every item row would make totals add up wrong.
+  const MONEY = /\b(total|subtotal|taxes?|tax \d|discount amount|refunded amount|amount|price|cost|fees?|paid)\b|^shipping$/i;
+  function suggestFill(loaded, orderCol) {
+    const groups = new Map();
+    for (const r of loaded.rows.slice(1)) {
+      const id = r[orderCol];
+      if (id === "") continue;
+      if (!groups.has(id)) groups.set(id, []);
+      groups.get(id).push(r);
+    }
+    const multi = [...groups.values()].filter((g) => g.length > 1);
+    const columns = [], money = [];
+    if (multi.length) {
+      loaded.headers.forEach((h, c) => {
+        if (c === orderCol) return;
+        const fits = multi.filter((g) => g[0][c] !== "" && g.slice(1).every((r) => r[c] === "")).length;
+        if (fits / multi.length >= 0.6) (MONEY.test(h) ? money : columns).push(c);
+      });
+    }
+    return { orders: groups.size, multiItemOrders: multi.length, columns, money };
+  }
+
+  // Recognise common store exports by their column names. Conservative: no clear match, no preset.
+  // Shopify's columns follow its documented orders export. Etsy's match the full Orders / Order Items
+  // header lists published by Coupler.io (checked 2026-10-25), but not a real Etsy file yet, so the page
+  // says "looks like".
+  function detectPreset(loaded) {
+    const H = loaded.headers.map((h) => h.toLowerCase());
+    const col = (...names) => { for (const n of names) { const i = H.indexOf(n); if (i >= 0) return i; } return -1; };
+    const shopName = col("name"), shopItem = col("lineitem name");
+    if (shopName >= 0 && shopItem >= 0 && col("financial status") >= 0) {
+      return { id: "shopify-orders", label: "a Shopify orders export (one row per item)", order: shopName, key: [shopName, shopItem] };
+    }
+    // Amazon's order report (Seller Central > Orders > Order Reports; tab-separated): one row per item, order
+    // details repeated on each. Column names per Amazon's SP-API report documentation (checked 2026-10-25).
+    const amzOrder = col("amazon-order-id"), amzSku = col("sku"), amzAsin = col("asin");
+    if (amzOrder >= 0 && (amzSku >= 0 || amzAsin >= 0) && col("product-name") >= 0) {
+      return { id: "amazon-orders", label: "an Amazon order report (one row per item)", order: amzOrder,
+               key: [amzOrder, amzSku >= 0 ? amzSku : amzAsin] };
+    }
+    const order = col("order id"), txn = col("transaction id"), listing = col("listing id");
+    if (order >= 0 && (txn >= 0 || listing >= 0)) {
+      return { id: "etsy-items", label: "an Etsy sold order items export (one row per item)", order, key: [order, txn >= 0 ? txn : listing] };
+    }
+    if (order >= 0 && (col("number of items") >= 0 || col("order value") >= 0)) {
+      return { id: "etsy-orders", label: "an Etsy sold orders export (one row per order)", order, key: [order] };
+    }
+    return null;
+  }
+
+  // Exact decimal arithmetic for sums: scale to integers, add, scale back. Null if any value isn't a number.
+  const NUM = /^-?(\d+|\d{1,3}(,\d{3})+)(\.\d+)?$/;
+  function sumDecimal(values) {
+    const clean = values.map((v) => v.trim().replace(/,/g, ""));
+    if (!clean.length || clean.some((v) => !NUM.test(v))) return null;
+    const places = Math.max(...clean.map((v) => (v.split(".")[1] || "").length));
+    let total = 0n;
+    for (const v of clean) {
+      const neg = v.startsWith("-"), [w, f = ""] = v.replace("-", "").split(".");
+      const n = BigInt(w + f.padEnd(places, "0"));
+      total += neg ? -n : n;
+    }
+    const neg = total < 0n, s = (neg ? -total : total).toString().padStart(places + 1, "0");
+    return (neg ? "-" : "") + (places ? s.slice(0, -places) + "." + s.slice(-places) : s);
+  }
+
+  // One row per order from a cleaned file. Per column, chosen across the whole file:
+  //   same on every row of each order -> that value; numbers that vary within an order -> their sum
+  //   ("(total of items)"); anything else -> the distinct values listed ("(all items)").
+  function orderSummary(csvText, delim, orderCol) {
+    const rows = parse(csvText, delim);
+    const names = rows[0], data = rows.slice(1);
+    const groups = new Map();
+    let noOrder = 0;
+    for (const r of data) {
+      if (r[orderCol] === "") { noOrder++; continue; }
+      if (!groups.has(r[orderCol])) groups.set(r[orderCol], []);
+      groups.get(r[orderCol]).push(r);
+    }
+    const kinds = names.map((_, c) => {
+      if (c === orderCol) return "order";
+      let constant = true, numeric = true;
+      for (const g of groups.values()) {
+        const vals = g.map((r) => r[c]).filter((v) => v !== "");
+        if (new Set(vals).size > 1) constant = false;
+        if (vals.some((v) => !NUM.test(v.trim().replace(/,/g, "")))) numeric = false;
+      }
+      return constant ? "same" : numeric ? "sum" : "list";
+    });
+    const header = [names[orderCol], "Rows in this order"].concat(names.map((n, c) =>
+      kinds[c] === "order" ? null : kinds[c] === "sum" ? `${n} (total of items)` : kinds[c] === "list" ? `${n} (all items)` : n)
+      .filter((x) => x !== null));
+    const out = [header];
+    for (const [id, g] of groups) {
+      const line = [id, String(g.length)];
+      names.forEach((_, c) => {
+        if (kinds[c] === "order") return;
+        const vals = g.map((r) => r[c]).filter((v) => v !== "");
+        if (kinds[c] === "same") line.push(vals[0] || "");
+        else if (kinds[c] === "sum") line.push(sumDecimal(vals) ?? "");
+        else line.push([...new Set(vals)].join(" | "));
+      });
+      out.push(line);
+    }
+    return { csv: toCSV(out, delim), orders: groups.size, rowsWithoutOrder: noOrder,
+             summed: names.filter((_, c) => kinds[c] === "sum"), listed: names.filter((_, c) => kinds[c] === "list") };
+  }
+
+  // A copy with one extra column explaining each flagged row, for reviewing in a spreadsheet.
+  function reviewCSV(cleaned, report, delim) {
+    const notes = new Map();
+    for (const d of report.repeats) notes.set(d.record, `Repeat of row ${d.matches}`);
+    for (const d of report.sameKey) notes.set(d.record, (notes.has(d.record) ? notes.get(d.record) + "; " : "") +
+      `Same ${report.key.join(", ")} as row ${d.matches}; ${sameKeyDetail(d)}`);
+    const rows = parse(cleaned, delim);
+    const out = rows.map((r, i) => r.concat(i === 0 ? ["Cleaner note"] : [notes.get(i + 1) || ""]));
+    return toCSV(out, delim);
+  }
+
+  return { load, clean, changeLog, reviewCSV, suggestFill, detectPreset, orderSummary, sumDecimal,
+           parse, toCSV, isRisky, columnLetters, CleanError, MAX_ROWS };
+})();
+
+</script>
+<script>
+// Profit Check engine: profit per product and per month from a store's order export, using the costs and
+// fee rates the seller enters. Reads files with the CSV Cleaner engine (Cleaner.load / Cleaner.detectPreset),
+// which must be loaded first. All money is whole cents (integers), so nothing drifts with float rounding.
+// Fees are estimates from the rates entered, not the platform's statement; the page says so.
+"use strict";
+
+const Profit = (() => {
+  class ProfitError extends Error {}
+
+  // Which columns hold what, by store. "line" means the price column is already quantity x unit price.
+  // Optional: orderDiscount / orderRefund (amounts for the whole order, read once from the order's first row
+  // that has them), lineDiscount (per row), cancelled (a status column; rows saying "cancelled" are left out).
+  const MAPS = {
+    "shopify-orders": { order: "name", product: "lineitem name", qty: "lineitem quantity", price: "lineitem price", priceIs: "unit",
+                        date: "created at", orderDiscount: "discount amount", orderRefund: "refunded amount" },
+    "etsy-items": { order: "order id", product: "item name", qty: "quantity", price: "price", priceIs: "unit", date: "sale date",
+                    orderDiscount: "discount amount" },
+    "amazon-orders": { order: "amazon-order-id", product: "product-name", qty: "quantity", price: "item-price", priceIs: "line",
+                       date: "purchase-date", lineDiscount: "item-promotion-discount", cancelled: "order-status" },
+  };
+  const OPTIONAL = ["date", "orderDiscount", "orderRefund", "lineDiscount", "cancelled"];
+  // Starting fee rates (the seller can change every one). pct is in hundredths of a percent: 950 = 9.50%.
+  const FEES = {
+    "etsy-items": { pct: 950, perOrder: 25, perItem: 20, note: "Etsy US: 6.5% transaction + 3% payment processing, $0.25 per order, $0.20 listing fee per item sold. Offsite Ads not included." },
+    "shopify-orders": { pct: 290, perOrder: 30, perItem: 0, note: "Shopify Payments, Basic plan, US online cards: 2.9% + $0.30. Other plans and countries differ." },
+    "amazon-orders": { pct: 1500, perOrder: 0, perItem: 0, note: "Amazon referral fee of 15% (most categories). Add $0.99 per item on the Individual plan; FBA fees aren't included." },
+  };
+
+  function mapFor(loaded, presetId) {
+    const m = MAPS[presetId];
+    if (!m) return null;
+    const H = loaded.headers.map((h) => h.toLowerCase());
+    const out = { priceIs: m.priceIs };
+    for (const k of ["order", "product", "qty", "price", ...OPTIONAL]) {
+      out[k] = m[k] ? H.indexOf(m[k]) : -1;
+      if (out[k] < 0 && !OPTIONAL.includes(k)) return null;
+    }
+    return out;
+  }
+
+  // "$1,234.50", "1234.5", "(12.00)", "-3", "USD 12.00" -> cents; anything else -> null.
+  function cents(raw) {
+    let s = String(raw ?? "").trim();
+    if (!s) return null;
+    let neg = false;
+    if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1).trim(); }
+    s = s.replace(/^[A-Z]{3}\s*/, "").replace(/^[$£€¥]\s*/, "").replace(/\s*[A-Z]{3}$/, "");
+    if (s.startsWith("-")) { neg = !neg; s = s.slice(1).replace(/^[$£€¥]\s*/, ""); }
+    if (!/^(\d+|\d{1,3}(,\d{3})+)(\.\d{1,4})?$/.test(s)) return null;
+    const [whole, frac = ""] = s.replace(/,/g, "").split(".");
+    const tenThousandths = Number(whole) * 10000 + Number((frac + "0000").slice(0, 4));
+    const c = Math.floor((tenThousandths + 50) / 100);  // round half up to the cent
+    return neg ? -c : c;
+  }
+
+  function qty(raw) {
+    const s = String(raw ?? "").trim();
+    return /^\d+(\.0+)?$/.test(s) ? Number(s.split(".")[0]) : null;
+  }
+
+  function pctOf(amount, pct) {  // pct in hundredths of a percent; rounds half away from zero
+    const v = Math.abs(amount) * pct;
+    const r = Math.floor((v + 5000) / 10000);
+    return amount < 0 ? -r : r;
+  }
+
+  // Split total into integer parts proportional to weights, summing exactly (largest remainder).
+  function allocate(total, weights) {
+    if (!weights.length) return [];
+    const w = weights.map((x) => Math.max(0, x));
+    const sum = w.reduce((a, b) => a + b, 0);
+    const base = sum ? w : w.map(() => 1);
+    const bsum = sum || w.length;
+    const sign = total < 0 ? -1 : 1, t = Math.abs(total);
+    const exact = base.map((x) => (t * x) / bsum);
+    const parts = exact.map(Math.floor);
+    let left = t - parts.reduce((a, b) => a + b, 0);
+    exact.map((x, i) => [x - Math.floor(x), i]).sort((a, b) => b[0] - a[0] || a[1] - b[1])
+      .forEach(([, i]) => { if (left > 0) { parts[i]++; left--; } });
+    return parts.map((p) => p * sign);
+  }
+
+  // "2026-10-20 ...", "2026-10-20T..." -> 2026-10; "10/01/26" or "10/01/2026" (US month first) -> 2026-10.
+  function month(raw) {
+    const s = String(raw ?? "").trim();
+    let m = s.match(/^(\d{4})-(\d{2})/);
+    if (m) return `${m[1]}-${m[2]}`;
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})\b/);
+    if (m && Number(m[1]) >= 1 && Number(m[1]) <= 12) return `${m[3].length === 2 ? "20" + m[3] : m[3]}-${m[1].padStart(2, "0")}`;
+    return "unknown";
+  }
+
+  // Products in file order with units sold, for the cost table. Same rows as compute() counts: exact repeats
+  // once, cancelled rows and rows without an order number left out.
+  function products(loaded, map, countRepeats = false) {
+    const units = new Map(), rows = new Set();
+    loaded.rows.slice(1).forEach((r) => {
+      const key = JSON.stringify(r);
+      if (rows.has(key) && !countRepeats) return;
+      rows.add(key);
+      const p = (r[map.product] || "").trim(), q = qty(r[map.qty]);
+      if (!p || !(r[map.order] || "").trim()) return;
+      if (map.cancelled >= 0 && /^cancel+ed$/i.test((r[map.cancelled] || "").trim())) return;
+      units.set(p, (units.get(p) || 0) + (q || 0));
+    });
+    return [...units].map(([name, n]) => ({ name, units: n }));
+  }
+
+  // settings: { costs: {product: cents per unit}, pct, perOrder, perItem, shipPerOrder, countRepeats }
+  function compute(loaded, map, settings) {
+    const s = { costs: {}, pct: 0, perOrder: 0, perItem: 0, shipPerOrder: 0, countRepeats: false, ...settings };
+    for (const k of ["pct", "perOrder", "perItem", "shipPerOrder"]) {
+      if (!Number.isInteger(s[k]) || s[k] < 0) throw new ProfitError("Fee and shipping amounts must be zero or more.");
+    }
+    const problems = [], seen = new Set(), orders = new Map();
+    let repeats = 0, noOrder = 0, cancelled = 0;
+    const col = (r, k) => (map[k] >= 0 ? (r[map[k]] || "").trim() : "");
+    loaded.rows.slice(1).forEach((r, i) => {
+      const rowNo = i + 2, key = JSON.stringify(r);
+      if (seen.has(key) && !s.countRepeats) { repeats++; return; }
+      seen.add(key);
+      const id = col(r, "order"), product = col(r, "product");
+      if (!id) { noOrder++; return; }
+      if (/^cancel+ed$/i.test(col(r, "cancelled"))) { cancelled++; return; }
+      if (!orders.has(id)) orders.set(id, { id, month: "unknown", discount: [], refund: [], lines: [] });
+      const o = orders.get(id);
+      if (o.month === "unknown" && map.date >= 0) o.month = month(col(r, "date"));
+      // order-level amounts, from every row that has one (Shopify fills them only on the order's first row;
+      // Etsy's item rows may repeat the order's discount or give each item its own); combined below
+      for (const [k, f] of [["discount", "orderDiscount"], ["refund", "orderRefund"]]) {
+        const v = col(r, f);
+        if (v) { const c = cents(v); if (c === null) problems.push(`Row ${rowNo}: ${loaded.headers[map[f]]} isn't a plain number`); else if (c) o[k].push(Math.abs(c)); }
+      }
+      if (!product) { problems.push(`Row ${rowNo}: no product name`); return; }
+      const q = qty(col(r, "qty")), p = cents(col(r, "price"));
+      if (q === null || p === null) { problems.push(`Row ${rowNo}: quantity or price isn't a plain number`); return; }
+      let revenue = map.priceIs === "unit" ? q * p : p;
+      const ld = col(r, "lineDiscount");
+      if (ld) { const c = cents(ld); if (c === null) problems.push(`Row ${rowNo}: discount isn't a plain number`); else revenue -= Math.abs(c); }
+      o.lines.push({ product, qty: q, revenue });
+    });
+    for (const [id, o] of orders) if (!o.lines.length) orders.delete(id);
+    // The same amount on every row that has one is the order's amount, counted once; different amounts are
+    // per item and added up. The page tells Etsy sellers to check one discounted order.
+    let perItemAmounts = 0;
+    for (const o of orders.values()) {
+      for (const k of ["discount", "refund"]) {
+        const v = o[k];
+        if (v.length > 1 && v.some((x) => x !== v[0])) { o[k] = v.reduce((a, b) => a + b, 0); perItemAmounts++; }
+        else o[k] = v.length ? v[0] : 0;
+      }
+    }
+
+    const byProduct = new Map(), byMonth = new Map(), orderRows = [], missingCost = new Set();
+    const add = (m, k, line) => {
+      const t = m.get(k) || { units: 0, revenue: 0, cost: 0, fees: 0, shipping: 0, orders: new Set() };
+      t.units += line.qty; t.revenue += line.revenue; t.cost += line.cost; t.fees += line.fees; t.shipping += line.shipping;
+      t.orders.add(line.order); m.set(k, t);
+    };
+    for (const o of orders.values()) {
+      // order discounts and refunds come off the order's items in proportion to their revenue
+      const weights = o.lines.map((l) => l.revenue);
+      const less = allocate((o.discount || 0) + (o.refund || 0), weights);
+      o.lines.forEach((l, i) => { l.revenue -= less[i]; });
+      const revenue = o.lines.reduce((a, l) => a + l.revenue, 0);
+      const units = o.lines.reduce((a, l) => a + l.qty, 0);
+      // percentage fees per item row; the per-order fee and shipping are shared across the order's items by revenue
+      const feeShare = allocate(s.perOrder, weights), shipShare = allocate(s.shipPerOrder, weights);
+      let oc = 0, of = 0, os = 0;
+      o.lines.forEach((l, i) => {
+        const unit = s.costs[l.product];
+        if (unit === undefined || unit === null) missingCost.add(l.product);
+        const line = { order: o.id, qty: l.qty, revenue: l.revenue, cost: (unit || 0) * l.qty,
+                       fees: pctOf(l.revenue, s.pct) + feeShare[i] + s.perItem * l.qty, shipping: shipShare[i] };
+        oc += line.cost; of += line.fees; os += line.shipping;
+        add(byProduct, l.product, line); add(byMonth, o.month, line);
+      });
+      orderRows.push({ order: o.id, month: o.month, units, revenue, cost: oc, fees: of, shipping: os, profit: revenue - oc - of - os });
+    }
+    const finish = (m) => [...m].map(([name, t]) => ({ name, units: t.units, orders: t.orders.size, revenue: t.revenue, cost: t.cost,
+      fees: t.fees, shipping: t.shipping, profit: t.revenue - t.cost - t.fees - t.shipping }));
+    const products = finish(byProduct).sort((a, b) => b.profit - a.profit || a.name.localeCompare(b.name));
+    const months = finish(byMonth).sort((a, b) => a.name.localeCompare(b.name));
+    const total = products.reduce((t, p) => { for (const k of ["units", "revenue", "cost", "fees", "shipping", "profit"]) t[k] += p[k]; return t; },
+      { units: 0, revenue: 0, cost: 0, fees: 0, shipping: 0, profit: 0 });
+    total.orders = orders.size;
+    const lessTotal = [...orders.values()].reduce((a, o) => a + (o.discount || 0) + (o.refund || 0), 0);
+    return { total, products, months, orders: orderRows, missingCost: [...missingCost], problems, repeats, noOrder, cancelled,
+             discountsAndRefunds: lessTotal, perItemAmounts };
+  }
+
+  function money(c) {
+    const neg = c < 0, a = Math.abs(c);
+    return (neg ? "-" : "") + Math.floor(a / 100).toLocaleString("en-US") + "." + String(a % 100).padStart(2, "0");
+  }
+  function margin(profit, revenue) { return revenue > 0 ? (Math.round((profit * 1000) / revenue) / 10).toFixed(1) + "%" : ""; }
+
+  function tableCSV(rows, label) {
+    const head = [label, "Orders", "Units", "Revenue", "Product cost", "Fees (estimate)", "Shipping you paid", "Profit", "Margin"];
+    const lines = [head].concat(rows.map((r) => [r.name, r.orders, r.units, money(r.revenue).replace(/,/g, ""), money(r.cost).replace(/,/g, ""),
+      money(r.fees).replace(/,/g, ""), money(r.shipping).replace(/,/g, ""), money(r.profit).replace(/,/g, ""), margin(r.profit, r.revenue)]));
+    return Cleaner.toCSV(lines.map((r) => r.map(String)), ",");
+  }
+
+  // Costs file: Product,Cost per unit. Lets the seller keep costs between months.
+  function costsCSV(list, costs) {
+    return Cleaner.toCSV([["Product", "Cost per unit"]].concat(list.map((p) => [p.name, costs[p.name] === undefined ? "" : money(costs[p.name]).replace(/,/g, "")])), ",");
+  }
+  function readCosts(bytes) {
+    const l = Cleaner.load(bytes);
+    const H = l.headers.map((h) => h.toLowerCase());
+    const pi = H.indexOf("product"), ci = H.findIndex((h) => h.startsWith("cost"));
+    if (pi < 0 || ci < 0) throw new ProfitError('A costs file needs the columns "Product" and "Cost per unit".');
+    const out = {}, bad = [];
+    l.rows.slice(1).forEach((r, i) => {
+      const name = (r[pi] || "").trim(), v = (r[ci] || "").trim();
+      if (!name || !v) return;
+      const c = cents(v);
+      if (c === null || c < 0) bad.push(i + 2); else out[name] = c;
+    });
+    return { costs: out, bad };
+  }
+
+  return { ProfitError, MAPS, FEES, mapFor, cents, qty, pctOf, allocate, month, products, compute, money, margin, tableCSV, costsCSV, readCosts };
+})();
+
+</script>
+<script>
+"use strict";
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const LIMIT = 50;
+  const FULL_URL = "";
+  if (LIMIT && FULL_URL.startsWith("https://")) { $("upgradeLink").href = FULL_URL; show("upgrade"); }
+  let loaded = null, map = null, list = [], result = null, fileName = "orders.csv", presetId = null;
+  const costs = {};
+
+  function show(id, on = true) { $(id).classList.toggle("hidden", !on); }
+  function msg(where, kind, text) { $(where).innerHTML = ""; const d = document.createElement("div"); d.className = "note " + kind; d.textContent = text; $(where).appendChild(d); return d; }
+  function save(name, text) {
+    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+  const td = (text, cls) => { const c = document.createElement("td"); c.textContent = text; if (cls) c.className = cls; return c; };
+  const $$ = (c) => "$" + Profit.money(c);
+  const pctText = (p) => (p / 100).toFixed(2).replace(/\.?0+$/, "");
+
+  const FIELDS = [["order", "Order number"], ["product", "Product"], ["qty", "Quantity"], ["price", "Price"], ["date", "Date (optional)"]];
+
+  async function open(file) {
+    fileName = file.name; result = null; ["mapCard", "costCard", "feeCard", "resultCard"].forEach((id) => show(id, false));
+    try { loaded = Cleaner.load(new Uint8Array(await file.arrayBuffer())); }
+    catch (e) { loaded = null; msg("loadMsg", "bad", e.message || String(e)); return; }
+    const rows = loaded.rows.length - 1;
+    if (LIMIT && rows > LIMIT) {
+      const d = msg("loadMsg", "warn", `This free version handles up to ${LIMIT} rows; your file has ${rows.toLocaleString()}. `);
+      if (FULL_URL.startsWith("https://")) { const a = document.createElement("a"); a.href = FULL_URL; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = "Get the full version"; d.appendChild(a); }
+      loaded = null; return;
+    }
+    const preset = Cleaner.detectPreset(loaded);
+    map = preset ? Profit.mapFor(loaded, preset.id) : null;
+    presetId = map ? preset.id : null;
+    const known = !!map;
+    if (!map) map = { order: -1, product: -1, qty: -1, price: -1, date: -1, priceIs: "unit", orderDiscount: -1, orderRefund: -1, lineDiscount: -1, cancelled: -1 };
+    msg("loadMsg", "ok", `${file.name}: ${rows.toLocaleString()} rows, ${loaded.width} columns.` + (known ? ` This looks like ${preset.label}; the columns are set for you.` : ""));
+    $("mapWhy").textContent = known ? "Set from the export's usual columns. Change any that look wrong." :
+      "Pick which column holds each thing. Profit Check needs one row per item sold (most order exports work that way).";
+    const grid = $("mapGrid"); grid.innerHTML = "";
+    FIELDS.forEach(([k, label]) => {
+      const l = document.createElement("label"); l.textContent = label;
+      const s = document.createElement("select"); s.dataset.k = k;
+      s.appendChild(new Option(k === "date" ? "(none)" : "Choose…", "-1"));
+      loaded.headers.forEach((h, i) => s.appendChild(new Option(h, String(i))));
+      s.value = String(map[k]);
+      s.addEventListener("change", () => { map[k] = Number(s.value); refresh(); });
+      l.appendChild(s); grid.appendChild(l);
+    });
+    const l = document.createElement("label"); l.textContent = "The price is";
+    const s = document.createElement("select"); s.id = "priceIs";
+    s.appendChild(new Option("for one unit", "unit")); s.appendChild(new Option("for the whole row (qty × unit)", "line"));
+    s.value = map.priceIs; s.addEventListener("change", () => { map.priceIs = s.value; refresh(); });
+    l.appendChild(s); grid.appendChild(l);
+    const fees = (preset && Profit.FEES[preset.id]) || { pct: 0, perOrder: 0, perItem: 0, note: "Enter your platform's fees. Your monthly statement or fee page lists them." };
+    $("pct").value = pctText(fees.pct); $("perOrder").value = Profit.money(fees.perOrder); $("perItem").value = Profit.money(fees.perItem);
+    $("feeNote").textContent = "Starting rates: " + fees.note;
+    show("mapCard"); refresh();
+  }
+
+  function ready() { return ["order", "product", "qty", "price"].every((k) => map[k] >= 0); }
+
+  function refresh() {
+    const tb = $("preview"); tb.innerHTML = "";
+    if (!ready()) { show("costCard", false); show("feeCard", false); return; }
+    loaded.rows.slice(1, 6).forEach((r) => {
+      const q = Profit.qty(r[map.qty]), p = Profit.cents(r[map.price]);
+      const rev = q === null || p === null ? "?" : $$(map.priceIs === "unit" ? q * p : p);
+      const tr = document.createElement("tr");
+      [r[map.order], r[map.product]].forEach((v) => tr.appendChild(td(v || "")));
+      tr.appendChild(td(r[map.qty] || "", "num")); tr.appendChild(td(r[map.price] || "", "num")); tr.appendChild(td(rev, "num"));
+      tb.appendChild(tr);
+    });
+    list = Profit.products(loaded, map);
+    const cb = $("costs"); cb.innerHTML = "";
+    list.forEach((p) => {
+      const tr = document.createElement("tr");
+      tr.appendChild(td(p.name)); tr.appendChild(td(p.units.toLocaleString(), "num"));
+      const c = document.createElement("td"); c.className = "num";
+      const inp = document.createElement("input"); inp.type = "text"; inp.className = "money"; inp.placeholder = "0.00";
+      inp.setAttribute("aria-label", "Cost per unit of " + p.name);
+      if (costs[p.name] !== undefined) inp.value = Profit.money(costs[p.name]);
+      inp.addEventListener("change", () => {
+        const v = inp.value.trim(), cents = Profit.cents(v);
+        if (!v) delete costs[p.name]; else if (cents === null || cents < 0) { inp.value = ""; delete costs[p.name]; } else { costs[p.name] = cents; inp.value = Profit.money(cents); }
+      });
+      c.appendChild(inp); tr.appendChild(c); cb.appendChild(tr);
+    });
+    show("costCard"); show("feeCard");
+  }
+
+  function amount(id, label) {
+    const c = Profit.cents($(id).value);
+    if (c === null || c < 0) throw new Profit.ProfitError(`${label} should be a number like 0.30.`);
+    return c;
+  }
+
+  function calculate() {
+    try {
+      const pctRaw = $("pct").value.trim().replace(/%$/, "");
+      const pctC = Profit.cents(pctRaw);  // 9.5 -> 950 hundredths of a percent
+      if (pctC === null || pctC < 0 || pctC > 10000) throw new Profit.ProfitError("The fee % should be a number between 0 and 100.");
+      result = Profit.compute(loaded, map, { costs, pct: pctC, perOrder: amount("perOrder", "Fee per order"),
+        perItem: amount("perItem", "Fee per item"), shipPerOrder: amount("ship", "Shipping per order") });
+    } catch (e) { msg("warnings", "bad", e.message || String(e)); show("resultCard"); $("tiles").innerHTML = ""; return; }
+    const r = result, t = r.total;
+    const w = $("warnings"); w.innerHTML = "";
+    const note = (kind, text) => { const d = document.createElement("div"); d.className = "note " + kind; d.textContent = text; w.appendChild(d); };
+    if (r.missingCost.length) note("warn", `No cost entered for ${r.missingCost.length} product(s), so their profit is too high: ${r.missingCost.slice(0, 8).join(", ")}${r.missingCost.length > 8 ? " and more" : ""}.`);
+    if (r.problems.length) note("warn", `${r.problems.length} row(s) left out because a number couldn't be read: ${r.problems.slice(0, 5).join("; ")}${r.problems.length > 5 ? "; and more" : ""}.`);
+    if (r.repeats) note("warn", `${r.repeats} row(s) were exact repeats of an earlier row and were counted once.`);
+    if (r.cancelled) note("ok", `${r.cancelled} cancelled row(s) left out.`);
+    if (r.noOrder) note("ok", `${r.noOrder} row(s) without an order number left out.`);
+    if (r.discountsAndRefunds) note("ok", `Discounts and refunds in the file (${$$(r.discountsAndRefunds)}) were taken off revenue.` +
+      (presetId === "etsy-items" ? " Etsy's item file doesn't say whether its Discount Amount is per order or per item: the same amount on every row of an order is counted once" +
+        (r.perItemAmounts ? `, and different amounts are added up (${r.perItemAmounts} order(s))` : "") + ". Check one discounted order against your Etsy order page." : ""));
+    const tiles = $("tiles"); tiles.innerHTML = "";
+    [["Revenue", t.revenue], ["Product costs", t.cost], ["Fees (estimate)", t.fees], ["Shipping you paid", t.shipping], ["Profit", t.profit]].forEach(([k, v]) => {
+      const d = document.createElement("div"); d.className = "tile"; const b = document.createElement("b"); b.textContent = $$(v);
+      const s = document.createElement("span"); s.textContent = k + (k === "Profit" && t.revenue > 0 ? ` (${Profit.margin(t.profit, t.revenue)} of revenue)` : "");
+      d.appendChild(b); d.appendChild(s); tiles.appendChild(d);
+    });
+    const pb = $("byProduct"); pb.innerHTML = "";
+    r.products.forEach((p) => {
+      const tr = document.createElement("tr"); tr.appendChild(td(p.name));
+      tr.appendChild(td(p.units.toLocaleString(), "num"));
+      [p.revenue, p.cost, p.fees, p.shipping].forEach((v) => tr.appendChild(td($$(v), "num")));
+      tr.appendChild(td($$(p.profit), p.profit < 0 ? "num neg" : "num")); tr.appendChild(td(Profit.margin(p.profit, p.revenue), "num"));
+      pb.appendChild(tr);
+    });
+    const mb = $("byMonth"); mb.innerHTML = "";
+    r.months.forEach((m) => {
+      const tr = document.createElement("tr"); tr.appendChild(td(m.name)); tr.appendChild(td(m.orders.toLocaleString(), "num"));
+      tr.appendChild(td($$(m.revenue), "num")); tr.appendChild(td($$(m.profit), m.profit < 0 ? "num neg" : "num")); tr.appendChild(td(Profit.margin(m.profit, m.revenue), "num"));
+      mb.appendChild(tr);
+    });
+    show("resultCard");
+  }
+
+  const stem = () => fileName.replace(/\.[^.]+$/, "");
+  $("file").addEventListener("change", (e) => e.target.files[0] && open(e.target.files[0]));
+  const drop = $("drop");
+  ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", (e) => e.dataTransfer.files[0] && open(e.dataTransfer.files[0]));
+  $("go").addEventListener("click", calculate);
+  $("saveCosts").addEventListener("click", () => save("product-costs.csv", Profit.costsCSV(list, costs)));
+  $("loadCostsBtn").addEventListener("click", () => $("costsFile").click());
+  $("costsFile").addEventListener("change", async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const got = Profit.readCosts(new Uint8Array(await f.arrayBuffer()));
+      Object.assign(costs, got.costs); refresh();
+      const matched = list.filter((p) => costs[p.name] !== undefined).length;
+      msg("costMsg", got.bad.length ? "warn" : "ok", `Loaded ${Object.keys(got.costs).length} cost(s); ${matched} of ${list.length} products in this file now have a cost.` +
+        (got.bad.length ? ` Rows ${got.bad.join(", ")} of the costs file couldn't be read.` : ""));
+    } catch (err) { msg("costMsg", "bad", err.message || String(err)); }
+    e.target.value = "";
+  });
+  $("dlProducts").addEventListener("click", () => result && save(stem() + "-profit-by-product.csv", Profit.tableCSV(result.products, "Product")));
+  $("dlMonths").addEventListener("click", () => result && save(stem() + "-profit-by-month.csv", Profit.tableCSV(result.months, "Month")));
+  $("dlOrders").addEventListener("click", () => result && save(stem() + "-profit-by-order.csv",
+    Profit.tableCSV(result.orders.map((o) => ({ ...o, name: o.order, orders: 1 })), "Order")));
+})();
+</script>
+</body>
+</html>

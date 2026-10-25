@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- No network at all: the browser blocks every connection, so your data can't leave this computer. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>CSV Cleaner (free, 50 rows)</title>
+<style>
+  :root { --ink:#1c2722; --muted:#5f6c65; --line:#d5ddd8; --bg:#f6f8f5; --card:#fff; --green:#1c7a4f; --green-soft:#e3f2ea;
+          --warn:#8a5a00; --warn-soft:#fff3cd; --bad:#b3362d; --bad-soft:#fde4e1; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#e7eee9; --muted:#a7b4ad; --line:#34413a; --bg:#121815; --card:#1a221e;
+          --green:#4cc38a; --green-soft:#183427; --warn:#f0c36b; --warn-soft:#3a3020; --bad:#ff8a80; --bad-soft:#3d2422; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; color:var(--ink); background:var(--bg); }
+  main { max-width: 920px; margin: 0 auto; padding: 28px 18px 60px; }
+  h1 { font-size: 30px; margin: 0 0 4px; } h2 { font-size: 19px; margin: 0 0 10px; }
+  .lede { color: var(--muted); margin: 0 0 22px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; }
+  .step { display:inline-block; width:26px; height:26px; border-radius:50%; background:var(--green); color:#fff; text-align:center; font-weight:700; margin-right:8px; line-height:26px; font-size:14px; }
+  .drop { display: block; border: 2px dashed var(--line); border-radius: 10px; padding: 26px; text-align: center; cursor: pointer; }
+  .drop.over { border-color: var(--green); background: var(--green-soft); }
+  .drop input { display:none; }
+  table { border-collapse: collapse; width: 100%; } th, td { text-align:left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { font-size: 13px; color: var(--muted); font-weight: 600; }
+  input[type=text] { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
+  /* phones: keep the rename boxes usable; long names and examples wrap instead of squeezing them */
+  #namesCard input[type=text] { min-width: 7.5em; }
+  #namesCard td:nth-child(2) { overflow-wrap: break-word; }
+  #namesCard td:nth-child(4) { overflow-wrap: anywhere; }  /* examples like emails have no spaces to break at */
+  @media (max-width: 480px) { th, td { padding: 6px 4px; } .card { padding: 14px 12px; } }
+  button { font: inherit; font-weight: 600; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--green); background: var(--green); color: #fff; cursor: pointer; margin: 4px 8px 4px 0; }
+  button.secondary { background: transparent; color: var(--green); }
+  .note { padding: 10px 12px; border-radius: 8px; margin: 10px 0; }
+  .note.ok { background: var(--green-soft); } .note.warn { background: var(--warn-soft); color: var(--ink); } .note.bad { background: var(--bad-soft); }
+  .muted { color: var(--muted); font-size: 14px; } .hidden { display: none; }
+  pre { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; font-size: 13px; max-height: 340px; overflow: auto; }
+  label.check { display:flex; gap:8px; align-items:center; margin: 4px 0; }
+  .lock { font-size: 13px; color: var(--muted); }
+  a { color: var(--green); font-weight: 600; } a:hover { text-decoration: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>CSV Cleaner</h1>
+  <p class="lede">Rename messy columns, find repeated and conflicting rows, and get a plain-English change log. Every row is kept and no value is changed.</p>
+  <p class="lock">🔒 Works offline. Your file never leaves this computer: this page has no internet access at all.</p>
+
+  <section class="card">
+    <h2><span class="step">1</span>Choose your CSV file</h2>
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept=".csv,.txt,text/csv">
+      <strong>Drop a CSV file here</strong> or click to choose one<br><span class="muted">Up to 20 MB and 100,000 rows. Excel: File &gt; Save As &gt; CSV first.</span>
+    </label>
+    <div id="loadMsg"></div>
+    <div id="presetBox" class="note ok hidden"><span id="presetText"></span>
+      <button id="presetGo" class="secondary" style="margin-left:8px">Use recommended settings</button></div>
+  </section>
+
+  <section class="card hidden" id="namesCard">
+    <h2><span class="step">2</span>Name your columns</h2>
+    <p class="muted">Type the names you want. Leave a box as it is to keep that name.</p>
+    <table><thead><tr><th>#</th><th>Your file has</th><th>Call it</th><th>Example value</th></tr></thead><tbody id="names"></tbody></table>
+  </section>
+
+  <section class="card hidden" id="keyCard">
+    <h2><span class="step">3</span>What counts as a duplicate?</h2>
+    <p class="muted">Rows that are identical in every column are always flagged. To also catch rows that share an ID but differ elsewhere (for example, the same order number with a different amount), tick the column(s) that together should be unique.</p>
+    <p class="muted"><strong>One row per item?</strong> Etsy and Shopify exports put each item of an order on its own row, so one order number can appear several times on purpose. Tick the order column <em>and</em> the item column (SKU, item or product), so separate items aren't flagged.</p>
+    <div id="keys"></div>
+  </section>
+
+  <section class="card hidden" id="fillCard">
+    <h2>Fill in order details on item rows <span class="muted">(optional)</span></h2>
+    <p class="muted" id="fillWhy"></p>
+    <label class="check"><input type="checkbox" id="fillOn"> Copy each order's details onto its other rows, in these columns:</label>
+    <div id="fillCols" style="margin-left:26px"></div>
+    <p class="muted" id="fillMoney"></p>
+    <p class="muted">Only blank cells are filled, only with that same order's own value, and the change log counts every one. Cells that already have a value are never changed.</p>
+  </section>
+
+  <section class="card hidden" id="riskCard">
+    <h2>Cells that could run as formulas</h2>
+    <div class="note warn" id="riskList"></div>
+    <label class="check"><input type="checkbox" id="neutralize"> Put an apostrophe (') in front of these cells so spreadsheets show them as text. Only these cells change, and the change log lists them.</label>
+  </section>
+
+  <section class="card hidden" id="goCard">
+    <h2><span class="step">4</span>Clean and download</h2>
+    <button id="go">Clean my file</button>
+    <div id="result"></div>
+    <div id="downloads" class="hidden">
+      <button id="dlClean">Download cleaned CSV</button>
+      <button id="dlLog" class="secondary">Download change log</button>
+      <button id="dlReview" class="secondary">Download review copy</button>
+      <button id="dlSummary" class="secondary hidden">Download order summary</button>
+      <p class="muted">The review copy is the cleaned file plus a "Cleaner note" column marking flagged rows, so you can sort and check them in your spreadsheet. Your original file is untouched.</p>
+      <p class="muted hidden" id="summaryNote"></p>
+      <pre id="log"></pre>
+    </div>
+  </section>
+  <p class="muted">Tip: if Excel shows ##### in a column, it's just too narrow. Double-click the line between the column letters to widen it.</p>
+  <p class="muted hidden" id="upgrade">This is the free version (up to 50 rows). <a id="upgradeLink" target="_blank" rel="noopener noreferrer">Get the full version</a> for files up to 100,000 rows.</p>
+</main>
+<script>
+// CSV Cleaner engine: the same rules as Mint's tested Python cleanup tool (mint/csv_cleanup.py), which
+// gives the same cleaned file. This self-serve version also accepts what the Python one stops for a
+// person to review: UTF-16 files, empty lines at the end, Excel's unnamed empty columns at the end, and
+// line breaks inside a value. Every row is kept in order and no data value changes, unless the user opts
+// in. Anything ignored is named in the change log. Runs entirely in the browser; nothing is sent anywhere.
+"use strict";
+
+const Cleaner = (() => {
+  const MAX_BYTES = 20 * 1024 * 1024;
+  const MAX_ROWS = 100000;
+  const MAX_COLS = 100;
+  const PLAIN_NEGATIVE = /^-(\d+|\d{1,3}(,\d{3})+)(\.\d+)?$/;
+  const RISKY_START = ["=", "+", "-", "@", "＝", "＋", "－", "＠"];
+
+  class CleanError extends Error {}
+
+  function decode(bytes) {
+    if (bytes.length > MAX_BYTES) throw new CleanError("The file is larger than 20 MB.");
+    // Excel's "Unicode Text" and some apps write UTF-16, always with a byte-order mark.
+    if (bytes[0] === 0xff && bytes[1] === 0xfe) return { text: new TextDecoder("utf-16le").decode(bytes.subarray(2)), encoding: "UTF-16", bom: true };
+    if (bytes[0] === 0xfe && bytes[1] === 0xff) return { text: new TextDecoder("utf-16be").decode(bytes.subarray(2)), encoding: "UTF-16", bom: true };
+    let start = 0;
+    if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) start = 3;
+    const body = bytes.subarray(start);
+    try {
+      return { text: new TextDecoder("utf-8", { fatal: true }).decode(body), encoding: "UTF-8", bom: start === 3 };
+    } catch (e) {
+      // Common for files saved by older Excel versions. Read as Windows-1252 and say so.
+      return { text: new TextDecoder("windows-1252").decode(body), encoding: "Windows-1252", bom: false };
+    }
+  }
+
+  function detectDelimiter(text) {
+    const counts = { ",": 0, ";": 0, "\t": 0 };
+    let quoted = false;
+    for (const ch of text) {
+      if (ch === '"') quoted = !quoted;
+      else if (!quoted && (ch === "\n" || ch === "\r")) break;
+      else if (!quoted && ch in counts) counts[ch]++;
+    }
+    const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    return best[1] > 0 ? best[0] : ",";
+  }
+
+  // RFC 4180 parsing, strict about broken quotes so nothing is silently misread.
+  function parse(text, delim) {
+    const rows = [];
+    let row = [], field = "", i = 0, quoted = false, atStart = true;
+    const n = text.length;
+    while (i < n) {
+      const ch = text[i];
+      if (quoted) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+          quoted = false; i++;
+          const next = text[i];
+          if (i < n && next !== delim && next !== "\n" && next !== "\r") {
+            throw new CleanError(`Row ${rows.length + 1} has a quote in an unexpected place.`);
+          }
+          continue;
+        }
+        field += ch; i++; continue;
+      }
+      if (ch === '"' && atStart) { quoted = true; atStart = false; i++; continue; }
+      if (ch === '"') throw new CleanError(`Row ${rows.length + 1} has a quote in an unexpected place.`);
+      if (ch === delim) { row.push(field); field = ""; atStart = true; i++; continue; }
+      if (ch === "\r" || ch === "\n") {
+        row.push(field); rows.push(row); row = []; field = ""; atStart = true;
+        i += (ch === "\r" && text[i + 1] === "\n") ? 2 : 1;
+        continue;
+      }
+      field += ch; atStart = false; i++;
+    }
+    if (quoted) throw new CleanError("The file ends inside a quoted value (an opening quote is never closed).");
+    if (field !== "" || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  // A cell a spreadsheet could run: one that starts (after spaces or line breaks) with =, +, -, @ (or their
+  // full-width forms), a tab or a carriage return. A line break inside a note is ordinary text.
+  function isRisky(value) {
+    const probe = value.replace(/^[ \n﻿]+/, "");
+    if (probe.startsWith("\t") || probe.startsWith("\r")) return true;
+    if (PLAIN_NEGATIVE.test(probe.replace(/ +$/, ""))) return false;
+    return RISKY_START.some((s) => probe.startsWith(s));
+  }
+
+  function columnLetters(n) {
+    let s = "";
+    while (n) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+    return s;
+  }
+
+  // Reads and checks a file. Returns everything the page needs to ask the user for choices.
+  function load(bytes) {
+    const { text, encoding, bom } = decode(bytes);
+    const delim = detectDelimiter(text);
+    let rows = parse(text, delim);
+    const blankLine = (r) => r.length === 1 && r[0] === "";
+    let emptyLinesAtEnd = 0;
+    while (rows.length > 1 && blankLine(rows[rows.length - 1])) { rows.pop(); emptyLinesAtEnd++; }
+    if (!rows.length || blankLine(rows[0])) throw new CleanError("The file is empty (or its first line is).");
+    let width = rows[0].length;
+    if (width < 1 || width > MAX_COLS) throw new CleanError(`Expected a header row with 1 to ${MAX_COLS} columns.`);
+    if (rows.length - 1 > MAX_ROWS) throw new CleanError(`The file has more than ${MAX_ROWS.toLocaleString()} rows.`);
+    const emptyRows = [];
+    rows.forEach((r, i) => { if (width > 1 && blankLine(r)) emptyRows.push(i + 1); });
+    if (emptyRows.length) {
+      throw new CleanError(`Row${emptyRows.length > 1 ? "s" : ""} ${emptyRows.slice(0, 10).join(", ")}${emptyRows.length > 10 ? " and more" : ""} ` +
+        `${emptyRows.length > 1 ? "are" : "is"} completely empty. Delete empty rows in the middle of the file (in your spreadsheet) ` +
+        "and try again; empty lines at the end are fine. Nothing was changed.");
+    }
+    const uneven = [];
+    rows.forEach((r, i) => { if (r.length !== width) uneven.push(i + 1); });
+    if (uneven.length) {
+      throw new CleanError(`Row${uneven.length > 1 ? "s" : ""} ${uneven.slice(0, 10).join(", ")}${uneven.length > 10 ? " and more" : ""} ` +
+        `ha${uneven.length > 1 ? "ve" : "s"} a different number of columns from the header. Nothing was changed.`);
+    }
+    // Excel often saves stray formatted cells as unnamed, empty columns at the end (Name,Total,,). Those
+    // hold nothing, so they're left out and named in the change log. One with any value is kept and must
+    // be named.
+    let emptyColumnsAtEnd = 0;
+    const emptyColumn = (c) => rows.every((r, i) => (i === 0 ? r[c].trim() : r[c]) === "");  // a cell of spaces isn't empty
+    while (width - emptyColumnsAtEnd > 1 && emptyColumn(width - emptyColumnsAtEnd - 1)) emptyColumnsAtEnd++;
+    if (emptyColumnsAtEnd) { rows = rows.map((r) => r.slice(0, width - emptyColumnsAtEnd)); width -= emptyColumnsAtEnd; }
+    const trimmed = rows[0].map((h) => h.trim());
+    const unnamed = trimmed.map((h, i) => (h ? "" : columnLetters(i + 1))).filter(Boolean);
+    if (unnamed.length) {
+      throw new CleanError(`Column${unnamed.length > 1 ? "s" : ""} ${unnamed.join(", ")} ${unnamed.length > 1 ? "have" : "has"} values ` +
+        "but no name in the header row. Give each column a name in your spreadsheet and try again.");
+    }
+    if (new Set(trimmed.map((h) => h.toLowerCase())).size !== width) throw new CleanError("Two columns have the same name.");
+    const risky = [];
+    rows.forEach((r, i) => r.forEach((v, c) => { if (isRisky(v)) risky.push({ row: i + 1, col: c + 1, letter: columnLetters(c + 1) }); }));
+    return { rows, delim, encoding, bom, headers: trimmed, original: rows[0], width, risky, emptyLinesAtEnd, emptyColumnsAtEnd };
+  }
+
+  function csvField(v, delim) {
+    return (v.includes(delim) || v.includes('"') || v.includes("\r") || v.includes("\n")) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+
+  function toCSV(rows, delim) {
+    return rows.map((r) => r.map((v) => csvField(v, delim)).join(delim)).join("\r\n") + "\r\n";
+  }
+
+  // options: { names: [new header per column], key: [column indexes], neutralize: bool }
+  function clean(loaded, options = {}) {
+    const { rows, width, original } = loaded;
+    const trimmed = loaded.headers;
+    const names = (options.names || trimmed).map((h, i) => (h || "").trim() || trimmed[i]);
+    if (names.length !== width) throw new CleanError("Give one name per column.");
+    if (new Set(names.map((h) => h.toLowerCase())).size !== width) throw new CleanError("Two columns would end up with the same name.");
+    if (names.some((h) => RISKY_START.slice(0, 4).some((s) => h.startsWith(s)))) throw new CleanError("A column name can't start with =, +, - or @.");
+    const renamed = [];
+    names.forEach((h, i) => { if (h !== trimmed[i]) renamed.push({ column: i + 1, from: trimmed[i], to: h }); });
+    const data = rows.slice(1).map((r) => r.slice());
+    let neutralized = 0;
+    if (options.neutralize) {
+      for (const cell of loaded.risky) {
+        if (cell.row === 1) continue;
+        data[cell.row - 2][cell.col - 1] = "'" + data[cell.row - 2][cell.col - 1];
+        neutralized++;
+      }
+    }
+    // Fill-down (opt-in): a blank cell in a chosen column gets the value from an earlier row of the SAME
+    // order. Never overwrites a value, never crosses orders, never fills rows without an order number.
+    const fill = options.fill && options.fill.columns && options.fill.columns.length ? options.fill : null;
+    const before = data.map((r) => r.slice());
+    const filled = {};
+    let filledTotal = 0, fillOrder = null;
+    if (fill) {
+      const oc = fill.order;
+      if (!(Number.isInteger(oc) && oc >= 0 && oc < width)) throw new CleanError("Choose the column with the order number.");
+      const cols = [...new Set(fill.columns)].filter((c) => Number.isInteger(c) && c >= 0 && c < width && c !== oc);
+      fillOrder = names[oc];
+      const known = new Map();
+      for (const r of data) {
+        if (r[oc] === "") continue;
+        if (!known.has(r[oc])) known.set(r[oc], {});
+        const k = known.get(r[oc]);
+        for (const c of cols) {
+          if (r[c] === "") {
+            if (k[c] !== undefined) { r[c] = k[c]; filled[names[c]] = (filled[names[c]] || 0) + 1; filledTotal++; }
+          } else if (k[c] === undefined) k[c] = r[c];
+        }
+      }
+    }
+    const repeats = [], seen = new Map();
+    rows.slice(1).forEach((r, i) => {
+      const k = JSON.stringify(r);
+      if (seen.has(k)) repeats.push({ record: i + 2, matches: seen.get(k) });
+      else seen.set(k, i + 2);
+    });
+    const key = (options.key || []).filter((c) => c >= 0 && c < width);
+    const sameKey = [];
+    if (key.length) {
+      const first = new Map();
+      rows.slice(1).forEach((r, i) => {
+        const k = JSON.stringify(key.map((c) => r[c]));
+        if (first.has(k)) {
+          const prev = rows[first.get(k) - 1];
+          // a cell blank on one row only (an export's item rows) isn't a disagreement; say so separately
+          const differs = names.filter((_, c) => prev[c] !== r[c] && prev[c] !== "" && r[c] !== "");
+          const blank = names.filter((_, c) => prev[c] !== r[c] && (prev[c] === "" || r[c] === ""));
+          if (differs.length || blank.length) sameKey.push({ record: i + 2, matches: first.get(k), differs, blank });
+        } else first.set(k, i + 2);
+      });
+    }
+    const out = [names].concat(data);
+    const report = {
+      rows: rows.length - 1, columns: width, encoding: loaded.encoding, delimiter: loaded.delim,
+      trimmedColumns: original.map((h, i) => (h !== trimmed[i] ? i + 1 : 0)).filter(Boolean),
+      sentNames: trimmed, renamed, key: key.map((c) => names[c]), repeats, sameKey,
+      blanks: data.reduce((s, r) => s + r.filter((v) => v === "").length, 0),
+      risky: loaded.risky.filter((x) => x.row > 1), neutralized, filled, filledTotal, fillOrder,
+      emptyLinesAtEnd: loaded.emptyLinesAtEnd || 0, emptyColumnsAtEnd: loaded.emptyColumnsAtEnd || 0,
+    };
+    // Verification. The file must read back exactly as built, and every cell that differs from the input
+    // must be either a neutralized cell the user chose, or a blank filled from an earlier row of the same
+    // order. Anything else means a value changed that shouldn't have, and nothing is saved.
+    const fail = () => { throw new CleanError("Verification failed: a value changed. Nothing was saved."); };
+    const back = parse(toCSV(out, loaded.delim), loaded.delim);
+    for (let i = 0; i < out.length; i++) if (JSON.stringify(back[i]) !== JSON.stringify(out[i])) fail();
+    const seenFirst = new Map();
+    let changes = 0;
+    rows.slice(1).forEach((orig, i) => {
+      const id = fill ? before[i][fill.order] : "";
+      orig.forEach((v, c) => {
+        const now = data[i][c];
+        if (now !== v) {
+          changes++;
+          const neutral = options.neutralize && now === "'" + v;
+          const fromOrder = fill && v === "" && before[i][c] === "" && id !== "" && seenFirst.get(id + "\u0000" + c) === now;
+          if (!neutral && !fromOrder) fail();
+        }
+        if (fill && id !== "" && before[i][c] !== "" && !seenFirst.has(id + "\u0000" + c)) seenFirst.set(id + "\u0000" + c, before[i][c]);
+      });
+    });
+    if (changes !== neutralized + filledTotal) fail();
+    return { csv: toCSV(out, loaded.delim), report, names };
+  }
+
+  // "different: Total" and/or "blank on one of the two rows: Email"; mint/csv_cleanup.py words it the same.
+  function sameKeyDetail(d) {
+    const parts = (d.differs.length ? [`different: ${d.differs.join(", ")}`] : [])
+      .concat(d.blank.length ? [`blank on one of the two rows: ${d.blank.join(", ")}`] : []);
+    return d.differs.length ? parts.join("; ") : "otherwise the same, except " + parts[0];
+  }
+
+  function changeLog(r) {
+    const L = ["What changed in your file", "",
+      `- ${r.rows} rows and ${r.columns} columns. Every row is still there, in the same order.`];
+    if (r.filledTotal) {
+      L.push(`- Filled in ${r.filledTotal} blank cell(s) on item rows with the order's own details, copied from an earlier row ` +
+        `with the same ${r.fillOrder}: ` + Object.entries(r.filled).map(([c, n]) => `${c} (${n})`).join(", ") +
+        ". Nothing was invented, and no cell that already had a value was changed.");
+    }
+    if (r.neutralized) L.push(`- ${r.neutralized} cell(s) that could run as spreadsheet formulas now start with an apostrophe ('), as you chose.`);
+    L.push(r.filledTotal || r.neutralized ? "- No other values were changed, and nothing was deleted."
+      : "- No values in your data were changed, filled in or deleted.");
+    if (r.encoding !== "UTF-8") L.push(`- The file was read as ${r.encoding} and saved as UTF-8 so accented letters stay correct.`);
+    if (r.emptyLinesAtEnd) L.push(`- Left out ${r.emptyLinesAtEnd} empty line(s) at the end of the file (no data in them).`);
+    if (r.emptyColumnsAtEnd) L.push(`- Left out ${r.emptyColumnsAtEnd} empty column(s) at the end of the file: no name and no values ` +
+      "(spreadsheets often save these by accident).");
+    if (r.trimmedColumns.length) L.push("- Removed extra spaces around these column headers: " + r.trimmedColumns.map((c) => `"${r.sentNames[c - 1]}"`).join(", ") + ".");
+    for (const x of r.renamed) L.push(`- Renamed column ${x.column} from "${x.from}" to "${x.to}".`);
+    if (r.repeats.length) {
+      L.push(`- ${r.repeats.length} row(s) are exact repeats of an earlier row. They're kept and listed so you can decide:`);
+      for (const d of r.repeats) L.push(`  - Row ${d.record} repeats row ${d.matches}`);
+    } else L.push("- No exact repeated rows found.");
+    if (r.key.length) {
+      const rule = r.key.join(", ");
+      if (r.sameKey.length) {
+        L.push(`- ${r.sameKey.length} row(s) share the same ${rule} as an earlier row but differ elsewhere. Kept and listed for you to check:`);
+        for (const d of r.sameKey) L.push(`  - Row ${d.record} has the same ${rule} as row ${d.matches}; ${sameKeyDetail(d)}`);
+      } else L.push(`- No other rows share the same ${rule}.`);
+    }
+    if (r.risky.length && !r.neutralized) {
+      L.push(`- ${r.risky.length} cell(s) start with =, +, - or @ and could run as formulas in a spreadsheet: ` +
+        r.risky.slice(0, 20).map((x) => `row ${x.row} column ${x.letter}`).join("; ") + (r.risky.length > 20 ? " and more" : "") + ". Left unchanged.");
+    }
+    L.push(`- ${r.blanks} blank cell(s) were left blank (nothing was invented).`, "",
+      "Row numbers count the header as row 1, the same as a spreadsheet.", "",
+      "Tip: if Excel shows ##### in a column, the column is just too narrow. Double-click the line between the column " +
+      "letters to widen it. Excel may also show 37.6 for 37.60; the file keeps the full value.");
+    return L.join("\r\n") + "\r\n";
+  }
+
+  // For one-row-per-item exports: which columns look like order details (filled on an order's first row,
+  // blank on its other rows). Money columns are reported separately and not suggested, because copying
+  // an order's total onto every item row would make totals add up wrong.
+  const MONEY = /\b(total|subtotal|taxes?|tax \d|discount amount|refunded amount|amount|price|cost|fees?|paid)\b|^shipping$/i;
+  function suggestFill(loaded, orderCol) {
+    const groups = new Map();
+    for (const r of loaded.rows.slice(1)) {
+      const id = r[orderCol];
+      if (id === "") continue;
+      if (!groups.has(id)) groups.set(id, []);
+      groups.get(id).push(r);
+    }
+    const multi = [...groups.values()].filter((g) => g.length > 1);
+    const columns = [], money = [];
+    if (multi.length) {
+      loaded.headers.forEach((h, c) => {
+        if (c === orderCol) return;
+        const fits = multi.filter((g) => g[0][c] !== "" && g.slice(1).every((r) => r[c] === "")).length;
+        if (fits / multi.length >= 0.6) (MONEY.test(h) ? money : columns).push(c);
+      });
+    }
+    return { orders: groups.size, multiItemOrders: multi.length, columns, money };
+  }
+
+  // Recognise common store exports by their column names. Conservative: no clear match, no preset.
+  // Shopify's columns follow its documented orders export. Etsy's match the full Orders / Order Items
+  // header lists published by Coupler.io (checked 2026-10-25), but not a real Etsy file yet, so the page
+  // says "looks like".
+  function detectPreset(loaded) {
+    const H = loaded.headers.map((h) => h.toLowerCase());
+    const col = (...names) => { for (const n of names) { const i = H.indexOf(n); if (i >= 0) return i; } return -1; };
+    const shopName = col("name"), shopItem = col("lineitem name");
+    if (shopName >= 0 && shopItem >= 0 && col("financial status") >= 0) {
+      return { id: "shopify-orders", label: "a Shopify orders export (one row per item)", order: shopName, key: [shopName, shopItem] };
+    }
+    // Amazon's order report (Seller Central > Orders > Order Reports; tab-separated): one row per item, order
+    // details repeated on each. Column names per Amazon's SP-API report documentation (checked 2026-10-25).
+    const amzOrder = col("amazon-order-id"), amzSku = col("sku"), amzAsin = col("asin");
+    if (amzOrder >= 0 && (amzSku >= 0 || amzAsin >= 0) && col("product-name") >= 0) {
+      return { id: "amazon-orders", label: "an Amazon order report (one row per item)", order: amzOrder,
+               key: [amzOrder, amzSku >= 0 ? amzSku : amzAsin] };
+    }
+    const order = col("order id"), txn = col("transaction id"), listing = col("listing id");
+    if (order >= 0 && (txn >= 0 || listing >= 0)) {
+      return { id: "etsy-items", label: "an Etsy sold order items export (one row per item)", order, key: [order, txn >= 0 ? txn : listing] };
+    }
+    if (order >= 0 && (col("number of items") >= 0 || col("order value") >= 0)) {
+      return { id: "etsy-orders", label: "an Etsy sold orders export (one row per order)", order, key: [order] };
+    }
+    return null;
+  }
+
+  // Exact decimal arithmetic for sums: scale to integers, add, scale back. Null if any value isn't a number.
+  const NUM = /^-?(\d+|\d{1,3}(,\d{3})+)(\.\d+)?$/;
+  function sumDecimal(values) {
+    const clean = values.map((v) => v.trim().replace(/,/g, ""));
+    if (!clean.length || clean.some((v) => !NUM.test(v))) return null;
+    const places = Math.max(...clean.map((v) => (v.split(".")[1] || "").length));
+    let total = 0n;
+    for (const v of clean) {
+      const neg = v.startsWith("-"), [w, f = ""] = v.replace("-", "").split(".");
+      const n = BigInt(w + f.padEnd(places, "0"));
+      total += neg ? -n : n;
+    }
+    const neg = total < 0n, s = (neg ? -total : total).toString().padStart(places + 1, "0");
+    return (neg ? "-" : "") + (places ? s.slice(0, -places) + "." + s.slice(-places) : s);
+  }
+
+  // One row per order from a cleaned file. Per column, chosen across the whole file:
+  //   same on every row of each order -> that value; numbers that vary within an order -> their sum
+  //   ("(total of items)"); anything else -> the distinct values listed ("(all items)").
+  function orderSummary(csvText, delim, orderCol) {
+    const rows = parse(csvText, delim);
+    const names = rows[0], data = rows.slice(1);
+    const groups = new Map();
+    let noOrder = 0;
+    for (const r of data) {
+      if (r[orderCol] === "") { noOrder++; continue; }
+      if (!groups.has(r[orderCol])) groups.set(r[orderCol], []);
+      groups.get(r[orderCol]).push(r);
+    }
+    const kinds = names.map((_, c) => {
+      if (c === orderCol) return "order";
+      let constant = true, numeric = true;
+      for (const g of groups.values()) {
+        const vals = g.map((r) => r[c]).filter((v) => v !== "");
+        if (new Set(vals).size > 1) constant = false;
+        if (vals.some((v) => !NUM.test(v.trim().replace(/,/g, "")))) numeric = false;
+      }
+      return constant ? "same" : numeric ? "sum" : "list";
+    });
+    const header = [names[orderCol], "Rows in this order"].concat(names.map((n, c) =>
+      kinds[c] === "order" ? null : kinds[c] === "sum" ? `${n} (total of items)` : kinds[c] === "list" ? `${n} (all items)` : n)
+      .filter((x) => x !== null));
+    const out = [header];
+    for (const [id, g] of groups) {
+      const line = [id, String(g.length)];
+      names.forEach((_, c) => {
+        if (kinds[c] === "order") return;
+        const vals = g.map((r) => r[c]).filter((v) => v !== "");
+        if (kinds[c] === "same") line.push(vals[0] || "");
+        else if (kinds[c] === "sum") line.push(sumDecimal(vals) ?? "");
+        else line.push([...new Set(vals)].join(" | "));
+      });
+      out.push(line);
+    }
+    return { csv: toCSV(out, delim), orders: groups.size, rowsWithoutOrder: noOrder,
+             summed: names.filter((_, c) => kinds[c] === "sum"), listed: names.filter((_, c) => kinds[c] === "list") };
+  }
+
+  // A copy with one extra column explaining each flagged row, for reviewing in a spreadsheet.
+  function reviewCSV(cleaned, report, delim) {
+    const notes = new Map();
+    for (const d of report.repeats) notes.set(d.record, `Repeat of row ${d.matches}`);
+    for (const d of report.sameKey) notes.set(d.record, (notes.has(d.record) ? notes.get(d.record) + "; " : "") +
+      `Same ${report.key.join(", ")} as row ${d.matches}; ${sameKeyDetail(d)}`);
+    const rows = parse(cleaned, delim);
+    const out = rows.map((r, i) => r.concat(i === 0 ? ["Cleaner note"] : [notes.get(i + 1) || ""]));
+    return toCSV(out, delim);
+  }
+
+  return { load, clean, changeLog, reviewCSV, suggestFill, detectPreset, orderSummary, sumDecimal,
+           parse, toCSV, isRisky, columnLetters, CleanError, MAX_ROWS };
+})();
+
+</script>
+<script>
+"use strict";
+(() => {
+  const $ = (id) => document.getElementById(id);
+  let loaded = null, fileName = "file.csv", output = null, fillOrderCol = -1, summaryCol = -1, preset = null;
+  const LIMIT = 50;
+  const FULL_URL = "https://nicnak.gumroad.com/l/scvfib";   // the free version links to the full one; the page itself still sends nothing
+  if (LIMIT && FULL_URL.startsWith("https://")) { $("upgradeLink").href = FULL_URL; show("upgrade"); }
+
+  function show(id, on = true) { $(id).classList.toggle("hidden", !on); }
+  function msg(where, kind, text) { $(where).innerHTML = ""; const d = document.createElement("div"); d.className = "note " + kind; d.textContent = text; $(where).appendChild(d); }
+  function save(name, text) {
+    const url = URL.createObjectURL(new Blob([text], { type: name.endsWith(".csv") ? "text/csv;charset=utf-8" : "text/plain;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+  function stem() { return fileName.replace(/\.[^.]+$/, ""); }
+
+  async function open(file) {
+    fileName = file.name; output = null; show("downloads", false); $("result").innerHTML = "";
+    ["namesCard", "keyCard", "fillCard", "riskCard", "goCard"].forEach((id) => show(id, false));
+    $("fillOn").checked = false; fillOrderCol = -1; summaryCol = -1; preset = null; show("presetBox", false);
+    try {
+      loaded = Cleaner.load(new Uint8Array(await file.arrayBuffer()));
+    } catch (e) { loaded = null; msg("loadMsg", "bad", e.message || String(e)); return; }
+    const rows = loaded.rows.length - 1;
+    if (LIMIT && rows > LIMIT) {
+      loaded = null;
+      msg("loadMsg", "warn", `This free version handles up to ${LIMIT} rows; your file has ${rows.toLocaleString()}. The full version handles files up to 20 MB and 100,000 rows. `);
+      if (FULL_URL.startsWith("https://")) {
+        const a = document.createElement("a"); a.href = FULL_URL; a.target = "_blank"; a.rel = "noopener noreferrer";
+        a.textContent = "Get the full version"; $("loadMsg").firstChild.appendChild(a);
+      }
+      return;
+    }
+    msg("loadMsg", "ok", `${file.name}: ${rows.toLocaleString()} rows, ${loaded.width} columns` +
+      (loaded.delim === ";" ? ", separated by semicolons" : loaded.delim === "\t" ? ", separated by tabs" : "") +
+      (loaded.encoding !== "UTF-8" ? `. Read as ${loaded.encoding}.` : "."));
+    const tb = $("names"); tb.innerHTML = "";
+    loaded.headers.forEach((h, i) => {
+      const tr = document.createElement("tr");
+      const ex = (loaded.rows[1] || [])[i] || "";
+      [String(i + 1), JSON.stringify(loaded.original[i])].forEach((t) => { const td = document.createElement("td"); td.textContent = t; tr.appendChild(td); });
+      const td = document.createElement("td"); const inp = document.createElement("input"); inp.type = "text"; inp.value = h; inp.dataset.i = i; inp.setAttribute("aria-label", "New name for column " + (i + 1)); td.appendChild(inp); tr.appendChild(td);
+      const td2 = document.createElement("td"); td2.className = "muted"; td2.textContent = ex.length > 30 ? ex.slice(0, 30) + "…" : ex; tr.appendChild(td2);
+      tb.appendChild(tr);
+    });
+    const kd = $("keys"); kd.innerHTML = "";
+    // Shopify calls the order number "Name" (#1001); elsewhere "Name" is a person, so check the values.
+    const firstValue = (i) => ((loaded.rows[1] || [])[i] || "").trim();
+    const isOrder = (h, i) => /\b(order|invoice|transaction|sale|purchase)\b.*\b(id|no|number|#)\b|^(id|order)$/i.test(h) ||
+      (/^name$/i.test(h) && /^#?\d{3,}$/.test(firstValue(i)));
+    const isItem = (h) => /\b(sku|lineitem|line item|listing id|item id|product id|variant)\b|^(item|product|lineitem name|item name|product name|title)$/i.test(h);
+    const orderCol = loaded.headers.findIndex((h, i) => isOrder(h, i));
+    // Only pick an item column if the order number repeats, i.e. this is a one-row-per-item export.
+    const ids = orderCol < 0 ? [] : loaded.rows.slice(1).map((r) => r[orderCol]).filter(Boolean);
+    const itemCol = orderCol >= 0 && new Set(ids).size < ids.length ? loaded.headers.findIndex(isItem) : -1;
+    loaded.headers.forEach((h, i) => {
+      const l = document.createElement("label"); l.className = "check";
+      const c = document.createElement("input"); c.type = "checkbox"; c.dataset.i = i;
+      if (i === orderCol || i === itemCol) c.checked = true;
+      const span = document.createElement("span"); span.textContent = h; span.dataset.i = i;
+      l.appendChild(c); l.appendChild(span); kd.appendChild(l);
+    });
+    // One row per item: offer to copy each order's details (only on its first row) onto its other rows.
+    if (itemCol >= 0) {
+      const s = Cleaner.suggestFill(loaded, orderCol);
+      if (s.columns.length || s.money.length) {
+        fillOrderCol = orderCol;
+        $("fillWhy").textContent = `${s.multiItemOrders} of your ${s.orders} orders have more than one item. Their details are only on each ` +
+          `order's first row, so sorting or counting by them leaves the other items blank.`;
+        const fc = $("fillCols"); fc.innerHTML = "";
+        loaded.headers.forEach((h, i) => {
+          if (i === orderCol || !(s.columns.includes(i) || s.money.includes(i))) return;
+          const l = document.createElement("label"); l.className = "check";
+          const c = document.createElement("input"); c.type = "checkbox"; c.dataset.i = i; c.checked = s.columns.includes(i);
+          const span = document.createElement("span"); span.textContent = h; span.dataset.i = i;
+          l.appendChild(c); l.appendChild(span); fc.appendChild(l);
+        });
+        $("fillMoney").textContent = s.money.length ? "Money columns (like totals) aren't ticked: copying an order's total onto " +
+          "every item row would count it once per item when you add them up." : "";
+        show("fillCard");
+      }
+    }
+    // Known store export? Offer its settings in one click; nothing changes until the button is pressed.
+    preset = Cleaner.detectPreset(loaded);
+    summaryCol = preset ? preset.order : orderCol;
+    if (preset) {
+      $("presetText").textContent = `This looks like ${preset.label}.`;
+      show("presetBox");
+    }
+    // Keep the duplicate and fill-in choices in step with the names being typed in step 2.
+    document.querySelectorAll("#names input").forEach((inp) => inp.addEventListener("input", () => {
+      document.querySelectorAll(`#keys span[data-i="${inp.dataset.i}"], #fillCols span[data-i="${inp.dataset.i}"]`)
+        .forEach((span) => { span.textContent = inp.value.trim() || loaded.headers[inp.dataset.i]; });
+    }));
+    const risky = loaded.risky.filter((x) => x.row > 1);
+    if (risky.length) {
+      $("riskList").textContent = `${risky.length} cell(s) start with =, +, - or @: ` + risky.slice(0, 15).map((x) => `row ${x.row} column ${x.letter}`).join("; ") +
+        (risky.length > 15 ? " and more" : "") + ". By default they're left exactly as they are and listed in the change log.";
+      show("riskCard");
+    }
+    ["namesCard", "keyCard", "goCard"].forEach((id) => show(id));
+  }
+
+  $("presetGo").addEventListener("click", () => {
+    if (!preset) return;
+    document.querySelectorAll("#keys input").forEach((c) => { c.checked = preset.key.includes(Number(c.dataset.i)); });
+    if (!$("fillCard").classList.contains("hidden")) $("fillOn").checked = true;   // suggested columns are already ticked
+    $("presetText").textContent = `Settings for ${preset.label} applied: duplicates are checked by ` +
+      preset.key.map((i) => loaded.headers[i]).join(" + ") + ($("fillOn").checked ? ", and order details will be filled in on item rows." : ".") +
+      " You can still change anything below.";
+    show("presetGo", false);
+  });
+
+  $("file").addEventListener("change", (e) => e.target.files[0] && open(e.target.files[0]));
+  const drop = $("drop");
+  ["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", (e) => e.dataTransfer.files[0] && open(e.dataTransfer.files[0]));
+
+  $("go").addEventListener("click", () => {
+    if (!loaded) return;
+    const names = [...document.querySelectorAll("#names input")].map((i) => i.value);
+    const key = [...document.querySelectorAll("#keys input:checked")].map((i) => Number(i.dataset.i));
+    const fillCols = [...document.querySelectorAll("#fillCols input:checked")].map((i) => Number(i.dataset.i));
+    const fill = $("fillOn").checked && fillOrderCol >= 0 && fillCols.length ? { order: fillOrderCol, columns: fillCols } : null;
+    try {
+      const r = Cleaner.clean(loaded, { names, key, fill, neutralize: $("neutralize").checked });
+      const log = Cleaner.changeLog(r.report);
+      output = { csv: r.csv, log, review: Cleaner.reviewCSV(r.csv, r.report, loaded.delim) };
+      show("dlSummary", false); show("summaryNote", false);
+      if (summaryCol >= 0) {
+        const s = Cleaner.orderSummary(r.csv, loaded.delim, summaryCol);
+        output.summary = s.csv;
+        $("summaryNote").textContent = `The order summary has one row per order (${s.orders.toLocaleString()} orders` +
+          (s.rowsWithoutOrder ? `; ${s.rowsWithoutOrder} row(s) without an order number are left out` : "") + "). " +
+          (s.summed.length ? `Added up per order: ${s.summed.join(", ")}. ` : "") +
+          (s.listed.length ? `Listed per order: ${s.listed.join(", ")}. ` : "") +
+          "Details that are the same on every row of an order (like its total) appear once, not added up.";
+        show("dlSummary"); show("summaryNote");
+      }
+      const flagged = r.report.repeats.length + r.report.sameKey.length;
+      msg("result", "ok", `Done: ${r.report.rows.toLocaleString()} rows kept, ${flagged.toLocaleString()} flagged for you to check, ${r.report.renamed.length} column(s) renamed` +
+        (r.report.filledTotal ? `, ${r.report.filledTotal.toLocaleString()} blank cell(s) filled from their own order.` : "."));
+      $("log").textContent = log; show("downloads");
+    } catch (e) { output = null; show("downloads", false); msg("result", "bad", e.message || String(e)); }
+  });
+  $("dlClean").addEventListener("click", () => output && save(stem() + "-cleaned.csv", output.csv));
+  $("dlLog").addEventListener("click", () => output && save(stem() + "-change-log.txt", output.log));
+  $("dlReview").addEventListener("click", () => output && save(stem() + "-review.csv", output.review));
+  $("dlSummary").addEventListener("click", () => output && output.summary && save(stem() + "-orders.csv", output.summary));
+})();
+</script>
+</body>
+</html>

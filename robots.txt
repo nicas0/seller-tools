@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://nicas0.github.io/seller-tools/sitemap.xml
