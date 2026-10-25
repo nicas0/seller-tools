@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Calculadora de comisiones de Shopify: cuánto ganas por pedido y qué precio cobrar</title>
+<meta name="description" content="Calculadora gratis de comisiones de Shopify para vendedores en EE. UU.: procesamiento de Shopify Payments (2.9% + $0.30 en el plan Basic), la comisión extra con otro proveedor, tu ganancia por pedido y el precio para tu margen.">
+<link rel="canonical" href="https://nicas0.github.io/seller-tools/tools/calculadora-comisiones-shopify.html">
+<meta property="og:title" content="Calculadora de comisiones de Shopify: cuánto ganas por pedido">
+<meta property="og:description" content="Las comisiones de Shopify, tu ganancia por pedido y el precio para el margen que quieres. Funciona en tu navegador.">
+<meta property="og:url" content="https://nicas0.github.io/seller-tools/tools/calculadora-comisiones-shopify.html">
+<meta property="og:image" content="https://nicas0.github.io/seller-tools/img/share.png">
+<link rel="alternate" hreflang="en" href="https://nicas0.github.io/seller-tools/tools/shopify-fee-calculator.html">
+<link rel="alternate" hreflang="es" href="https://nicas0.github.io/seller-tools/tools/calculadora-comisiones-shopify.html">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .calc { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 16px; }
+  .calc label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+  .calc input, .calc select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); }
+  .calc input:focus, .calc select:focus { outline: 3px solid var(--green); outline-offset: 1px; }
+  .big { font-size: 30px; font-weight: 800; }
+</style>
+</head>
+<body>
+<header><a href="../index.html">Seller Tools</a><nav><a href="shopify-fee-calculator.html">English</a><a href="../guides.html">Guides</a></nav></header>
+<main>
+<h1>Calculadora de comisiones de Shopify</h1>
+<p class="lede">Escribe tu precio y tus costos: verás las comisiones de pago de Shopify, lo que te queda y el precio para el margen que quieres. Todo se calcula en tu navegador; no se envía nada.</p>
+<div class="card">
+  <div class="calc" id="inputs"></div>
+</div>
+<div class="card" aria-live="polite">
+  <p>Te queda por pedido: <span class="big" id="keep">-</span> <span id="margin" class="lede"></span></p>
+  <table id="breakdown"></table>
+  <p id="targetPrice"></p>
+</div>
+<p class="muted">Plan Basic, tarjetas en línea de EE. UU. (revisado en octubre de 2026): 2.9% + $0.30 con Shopify Payments;
+con otro proveedor de pago, Shopify cobra además un 2% en el plan Basic. Otros planes y países tienen otras tarifas, y
+la cuota mensual de tu plan no está incluida. Revisa Configuración > Pagos en tu panel de Shopify.</p>
+<p>¿Vendes en Etsy? <a href="calculadora-comisiones-etsy.html">Calculadora de comisiones de Etsy</a>.</p></main>
+<footer>Hecho por nicnak. Sin rastreo ni cookies; esta página no tiene acceso a internet. No es asesoría contable ni fiscal.</footer>
+<script>
+"use strict";
+(() => {
+  // Las mismas fórmulas que la calculadora en inglés (tools/shopify-fee-calculator.html), en centavos.
+  const FIELDS = [["price", "Precio del artículo ($)", "18.00"], ["shipCharged", "Envío que cobras ($)", "0.00"],
+    ["cost", "Costo de hacerlo o comprarlo ($)", "6.50"], ["label", "Etiqueta de envío que pagas ($)", "4.50"],
+    ["packaging", "Empaque ($)", "0.00"], ["target", "Margen que quieres (%)", "30"], ["gateway", "Proveedor de pago", "shopify"]];
+  const $ = (id) => document.getElementById(id);
+  const box = $("inputs");
+  for (const [id, label, value] of FIELDS) {
+    const l = document.createElement("label"); l.textContent = label;
+    let el;
+    if (id === "gateway") {
+      el = document.createElement("select");
+      for (const [v, t] of [["shopify", "Shopify Payments"], ["other", "Otro proveedor (+2% en Basic)"]]) el.appendChild(new Option(t, v));
+    } else { el = document.createElement("input"); el.type = "text"; el.inputMode = "decimal"; }
+    el.id = id; el.value = value; el.addEventListener("input", calc); el.addEventListener("change", calc);
+    l.appendChild(el); box.appendChild(l);
+  }
+  function cents(s) {
+    s = String(s).trim().replace(/^\$/, "").replace(/,/g, "");
+    if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+    const [w, f = ""] = s.split(".");
+    return Number(w) * 100 + Number((f + "00").slice(0, 2));
+  }
+  const pct = (amount, h) => Math.floor((amount * h + 5000) / 10000);
+  const money = (c) => (c < 0 ? "-$" : "$") + (Math.abs(c) / 100).toFixed(2);
+  function calc() {
+    const v = {};
+    for (const k of ["price", "shipCharged", "cost", "label", "packaging"]) v[k] = cents($(k).value);
+    const target = Number($("target").value);
+    if (Object.values(v).some((x) => x === null) || !(target >= 0 && target < 100)) {
+      $("keep").textContent = "-"; $("margin").textContent = "Revisa los números: usa cantidades como 18.00.";
+      $("breakdown").innerHTML = ""; $("targetPrice").textContent = ""; return;
+    }
+    const paid = v.price + v.shipCharged, costs = v.cost + v.label + v.packaging;
+    const other = $("gateway").value === "other" ? 200 : 0;
+    const lines = [["Procesamiento de pago (2.9% + $0.30)", pct(paid, 290) + 30]];
+    if (other) lines.push(["Comisión por otro proveedor (2%)", pct(paid, other)]);
+    const fees = lines.reduce((a, l) => a + l[1], 0), keep = paid - costs - fees;
+    const rows = [["El comprador paga", paid], ...lines.map(([t, c]) => [t, -c]), ["Tus costos (producto, etiqueta, empaque)", -costs], ["Te queda", keep]];
+    $("breakdown").innerHTML = "";
+    for (const [t, c] of rows) {
+      const tr = document.createElement("tr"), a = document.createElement("td"), b = document.createElement("td");
+      a.textContent = t; b.textContent = money(c); b.className = "num";
+      if (t === "Te queda") a.style.fontWeight = b.style.fontWeight = "700";
+      tr.append(a, b); $("breakdown").appendChild(tr);
+    }
+    $("keep").textContent = money(keep);
+    $("margin").textContent = paid ? `(${(Math.round(keep * 1000 / paid) / 10).toFixed(1)}% de lo que paga el comprador)` : "";
+    const den = 10000 - 290 - other - Math.round(target * 100);
+    $("targetPrice").textContent = den <= 0 ? `Un margen de ${target}% no es posible con estas comisiones.`
+      : `Para quedarte con ${target}%, cobra unos ${money(Math.floor(((costs + 30) * 10000 * 10 / den + 5) / 10) - v.shipCharged)} por el artículo.`;
+  }
+  calc();
+})();
+</script>
+</body>
+</html>
