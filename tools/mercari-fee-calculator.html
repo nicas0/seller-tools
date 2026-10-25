@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Mercari fee calculator: the 10% selling fee, what you keep, and what to charge</title>
+<meta name="description" content="Free Mercari fee calculator: the 10% selling fee on the item and buyer-paid shipping, an optional processing fee, your profit per sale and the price for the margin you want. Runs in your browser.">
+<link rel="canonical" href="https://nicas0.github.io/seller-tools/tools/mercari-fee-calculator.html">
+<meta property="og:title" content="Mercari fee calculator: the 10% selling fee, what you keep, and what to charge">
+<meta property="og:description" content="Free Mercari fee calculator: the 10% selling fee on the item and buyer-paid shipping, an optional processing fee, your profit per sale and the price for the margin you want. Runs in your browser.">
+<meta property="og:url" content="https://nicas0.github.io/seller-tools/tools/mercari-fee-calculator.html">
+<meta property="og:image" content="https://nicas0.github.io/seller-tools/img/share.png">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .calc { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 16px; }
+  .calc label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+  .calc input, .calc select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); }
+  .calc input:focus, .calc select:focus { outline: 3px solid var(--green); outline-offset: 1px; }
+  .big { font-size: 30px; font-weight: 800; }
+</style>
+</head>
+<body>
+<header><a href="../index.html">Seller Tools</a><nav><a href="../csv-cleaner.html">CSV Cleaner</a><a href="../profit-check.html">Profit Check</a><a href="../guides.html">Guides</a></nav></header>
+<main>
+<h1>Mercari fee calculator</h1>
+<p class="lede">Type your price and costs: see Mercari&#x27;s fee, what you keep, and the price for the margin you want. Everything is worked out in your browser; nothing is sent anywhere.</p>
+<div class="card">
+  <div class="calc" id="inputs"></div>
+</div>
+<div class="card" aria-live="polite">
+  <p>You keep per sale: <span class="big" id="keep">-</span> <span id="margin" class="lede"></span></p>
+  <table id="breakdown"></table>
+  <p id="targetPrice"></p>
+</div>
+<p class="muted">Mercari US: a 10% selling fee on the item price plus any shipping the buyer pays (checked October 2026). Mercari has changed its fees several times; if your sale summary shows a payment processing fee (some sales have shown 2.9% + $0.30), type it into the two processing boxes. Your sale summary is the final word.</p>
+<p>Want this for every product, from your real orders? Try the free <a href="../profit-check.html">Profit Check</a>.
+Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> sorts them out.</p>
+</main>
+<footer>Made by nicnak. No tracking, no cookies; this page has no internet access. Not accounting or tax advice.</footer>
+<script>
+"use strict";
+(() => {
+  const PLATFORM = "mercari";
+  // Rates in hundredths of a percent and cents. Same formulas as the checked spreadsheet templates.
+  const FIELDS = PLATFORM === "etsy"
+    ? [["price", "Item price ($)", "18.00"], ["shipCharged", "Shipping you charge ($)", "0.00"], ["cost", "Cost to make ($)", "6.50"],
+       ["label", "Shipping label you pay ($)", "4.50"], ["packaging", "Packaging ($)", "0.00"], ["target", "Target margin (%)", "30"],
+       ["offsite", "Sold through an Offsite Ad?", "no"]]
+    : PLATFORM === "ebay"
+    ? [["price", "Item price ($)", "18.00"], ["shipCharged", "Shipping you charge ($)", "0.00"], ["salesTax", "Sales tax the buyer pays ($)", "0.00"],
+       ["cost", "Cost to make or buy ($)", "6.50"], ["label", "Shipping label you pay ($)", "4.50"], ["packaging", "Packaging ($)", "0.00"],
+       ["target", "Target margin (%)", "30"], ["fvf", "Final value fee (%)", "13.6"]]
+    : PLATFORM === "poshmark"
+    ? [["price", "Sale price ($)", "30.00"], ["cost", "What the item cost you ($)", "8.00"],
+       ["label", "Shipping discount you pay ($)", "0.00"], ["packaging", "Packaging ($)", "0.00"], ["target", "Target margin (%)", "30"]]
+    : PLATFORM === "mercari"
+    ? [["price", "Item price ($)", "25.00"], ["shipCharged", "Shipping the buyer pays ($)", "0.00"], ["cost", "What the item cost you ($)", "8.00"],
+       ["label", "Shipping label you pay ($)", "5.00"], ["packaging", "Packaging ($)", "0.00"], ["target", "Target margin (%)", "30"],
+       ["procPct", "Payment processing (%), if your sale shows one", "0"], ["procFixed", "Payment processing, fixed ($)", "0.00"]]
+    : PLATFORM === "depop"
+    ? [["price", "Item price ($)", "25.00"], ["shipCharged", "Shipping the buyer pays ($)", "5.00"], ["salesTax", "Sales tax the buyer pays ($)", "0.00"],
+       ["cost", "What the item cost you ($)", "8.00"], ["label", "Shipping label you pay ($)", "5.00"], ["packaging", "Packaging ($)", "0.00"],
+       ["target", "Target margin (%)", "30"]]
+    : [["price", "Item price ($)", "18.00"], ["shipCharged", "Shipping you charge ($)", "0.00"], ["cost", "Cost to make or buy ($)", "6.50"],
+       ["label", "Shipping label you pay ($)", "4.50"], ["packaging", "Packaging ($)", "0.00"], ["target", "Target margin (%)", "30"],
+       ["gateway", "Payment provider", "shopify"]];
+  const $ = (id) => document.getElementById(id);
+  const box = $("inputs");
+  for (const [id, label, value] of FIELDS) {
+    const l = document.createElement("label"); l.textContent = label;
+    let el;
+    if (id === "offsite" || id === "gateway") {
+      el = document.createElement("select");
+      const opts = id === "offsite" ? [["no", "No"], ["yes15", "Yes, 15%"], ["yes12", "Yes, 12% (shops over $10k a year)"]]
+                                    : [["shopify", "Shopify Payments"], ["other", "Another provider (+2% on Basic)"]];
+      for (const [v, t] of opts) el.appendChild(new Option(t, v));
+    } else { el = document.createElement("input"); el.type = "text"; el.inputMode = "decimal"; }
+    el.id = id; el.value = value; el.addEventListener("input", calc); el.addEventListener("change", calc);
+    l.appendChild(el); box.appendChild(l);
+  }
+  // "$1,234.50" -> cents; anything else -> null
+  function cents(s) {
+    s = String(s).trim().replace(/^\$/, "").replace(/,/g, "");
+    if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+    const [w, f = ""] = s.split(".");
+    return Number(w) * 100 + Number((f + "00").slice(0, 2));
+  }
+  const pct = (amount, hundredthsPct) => Math.floor((amount * hundredthsPct + 5000) / 10000);  // round half up, amount >= 0
+  const money = (c) => (c < 0 ? "-$" : "$") + (Math.abs(c) / 100).toFixed(2);
+  function calc() {
+    const v = {};
+    // money fields this platform shows; the rest count as $0
+    for (const k of ["price", "shipCharged", "salesTax", "cost", "label", "packaging", "procFixed"]) v[k] = $(k) ? cents($(k).value) : 0;
+    const target = Number($("target").value);
+    const fvfRate = PLATFORM === "ebay" ? Number($("fvf").value) : 0;
+    const procRate = PLATFORM === "mercari" ? Number($("procPct").value) : 0;
+    if (Object.values(v).some((x) => x === null) || !(target >= 0 && target < 100) || !(fvfRate >= 0 && fvfRate < 100)
+        || !(procRate >= 0 && procRate < 100)) {
+      $("keep").textContent = "-"; $("margin").textContent = "Check the numbers: use plain amounts like 18.00.";
+      $("breakdown").innerHTML = ""; $("targetPrice").textContent = ""; return;
+    }
+    const paid = v.price + v.shipCharged, lines = [], costs = v.cost + v.label + v.packaging;
+    let pctTotal, fixed;
+    if (PLATFORM === "etsy") {
+      const offsite = { no: 0, yes15: 1500, yes12: 1200 }[$("offsite").value];
+      lines.push(["Transaction fee (6.5%)", pct(paid, 650)], ["Payment processing (3% + $0.25)", pct(paid, 300) + 25],
+                 ["Listing fee (renews when it sells)", 20]);
+      if (offsite) lines.push([`Offsite Ads (${offsite / 100}%, capped at $100)`, Math.min(pct(paid, offsite), 10000)]);
+      pctTotal = 650 + 300 + offsite; fixed = 45;
+    } else if (PLATFORM === "ebay") {
+      // eBay: the final value fee is on the whole sale including shipping and sales tax (up to $7,500 per item;
+      // 2.35% above that), plus $0.30 per order up to $10.00 or $0.40 above.
+      const rate = Math.round(fvfRate * 100), total = paid + v.salesTax, top = 750000;
+      lines.push([`Final value fee (${fvfRate}% of the sale incl. shipping and tax)`, pct(Math.min(total, top), rate) + pct(Math.max(0, total - top), 235)],
+                 ["Per-order fee", total <= 1000 ? 30 : 40]);
+      pctTotal = rate; fixed = 40;  // target price below assumes no sales tax and an order over $10
+    } else if (PLATFORM === "poshmark") {
+      // Poshmark US: $2.95 flat on sales under $15, 20% at $15 and up (the buyer pays shipping to Poshmark)
+      lines.push([v.price < 1500 ? "Poshmark fee ($2.95 on sales under $15)" : "Poshmark fee (20%)", v.price < 1500 ? 295 : pct(v.price, 2000)]);
+      pctTotal = 2000; fixed = 0;
+    } else if (PLATFORM === "mercari") {
+      // Mercari US: 10% of the item price plus buyer-paid shipping; a processing fee only if your sale shows one
+      const proc = Math.round(procRate * 100);
+      lines.push(["Selling fee (10% of item and shipping)", pct(paid, 1000)]);
+      if (proc || v.procFixed) lines.push([`Payment processing (${procRate}% + ${money(v.procFixed)})`, pct(paid, proc) + v.procFixed]);
+      pctTotal = 1000 + proc; fixed = v.procFixed;
+    } else if (PLATFORM === "depop") {
+      // Depop US: no selling fee; payment processing 3.3% + $0.45 on the whole total, shipping and tax included
+      lines.push(["Payment processing (3.3% + $0.45 of the total incl. tax)", pct(paid + v.salesTax, 330) + 45]);
+      pctTotal = 330; fixed = 45;  // target price below assumes no sales tax
+    } else {
+      const other = $("gateway").value === "other" ? 200 : 0;
+      lines.push(["Payment processing (2.9% + $0.30)", pct(paid, 290) + 30]);
+      if (other) lines.push(["Third-party transaction fee (2%)", pct(paid, other)]);
+      pctTotal = 290 + other; fixed = 30;
+    }
+    const fees = lines.reduce((a, l) => a + l[1], 0), keep = paid - costs - fees;
+    const rows = [[(PLATFORM === "ebay" || PLATFORM === "depop") && v.salesTax ? "Buyer pays (item and shipping; the tax goes to the state)" : "Buyer pays", paid],
+                  ...lines.map(([t, c]) => [t, -c]), ["Your costs (make, label, packaging)", -costs], ["You keep", keep]];
+    $("breakdown").innerHTML = "";
+    for (const [t, c] of rows) {
+      const tr = document.createElement("tr"), a = document.createElement("td"), b = document.createElement("td");
+      a.textContent = t; b.textContent = money(c); b.className = "num";
+      if (t === "You keep") { a.style.fontWeight = b.style.fontWeight = "700"; }
+      tr.append(a, b); $("breakdown").appendChild(tr);
+    }
+    $("keep").textContent = money(keep);
+    $("margin").textContent = paid ? `(${(Math.round(keep * 1000 / paid) / 10).toFixed(1)}% of what the buyer pays)` : "";
+    // price for the target margin: (costs + fixed fees) / (1 - % fees - target) - shipping charged
+    const den = 10000 - pctTotal - Math.round(target * 100);
+    let price = den > 0 ? Math.floor(((costs + fixed) * 10000 * 10 / den + 5) / 10) - v.shipCharged : null;
+    if (PLATFORM === "poshmark" && price !== null && price < 1500) {
+      // under $15 the fee is a flat $2.95, so the price is (costs + 2.95) / (1 - target), kept below $15
+      const flatDen = 10000 - Math.round(target * 100);
+      price = flatDen > 0 ? Math.min(Math.floor(((costs + 295) * 10000 * 10 / flatDen + 5) / 10), 1500) : 1500;
+    }
+    $("targetPrice").textContent = price === null ? `A ${target}% margin isn't reachable after these fees.`
+      : `To keep ${target}%, charge about ${money(price)} for the item.`;
+  }
+  calc();
+})();
+</script>
+</body>
+</html>

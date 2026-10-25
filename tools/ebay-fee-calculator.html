@@ -51,6 +51,17 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
     ? [["price", "Item price ($)", "18.00"], ["shipCharged", "Shipping you charge ($)", "0.00"], ["salesTax", "Sales tax the buyer pays ($)", "0.00"],
        ["cost", "Cost to make or buy ($)", "6.50"], ["label", "Shipping label you pay ($)", "4.50"], ["packaging", "Packaging ($)", "0.00"],
        ["target", "Target margin (%)", "30"], ["fvf", "Final value fee (%)", "13.6"]]
+    : PLATFORM === "poshmark"
+    ? [["price", "Sale price ($)", "30.00"], ["cost", "What the item cost you ($)", "8.00"],
+       ["label", "Shipping discount you pay ($)", "0.00"], ["packaging", "Packaging ($)", "0.00"], ["target", "Target margin (%)", "30"]]
+    : PLATFORM === "mercari"
+    ? [["price", "Item price ($)", "25.00"], ["shipCharged", "Shipping the buyer pays ($)", "0.00"], ["cost", "What the item cost you ($)", "8.00"],
+       ["label", "Shipping label you pay ($)", "5.00"], ["packaging", "Packaging ($)", "0.00"], ["target", "Target margin (%)", "30"],
+       ["procPct", "Payment processing (%), if your sale shows one", "0"], ["procFixed", "Payment processing, fixed ($)", "0.00"]]
+    : PLATFORM === "depop"
+    ? [["price", "Item price ($)", "25.00"], ["shipCharged", "Shipping the buyer pays ($)", "5.00"], ["salesTax", "Sales tax the buyer pays ($)", "0.00"],
+       ["cost", "What the item cost you ($)", "8.00"], ["label", "Shipping label you pay ($)", "5.00"], ["packaging", "Packaging ($)", "0.00"],
+       ["target", "Target margin (%)", "30"]]
     : [["price", "Item price ($)", "18.00"], ["shipCharged", "Shipping you charge ($)", "0.00"], ["cost", "Cost to make or buy ($)", "6.50"],
        ["label", "Shipping label you pay ($)", "4.50"], ["packaging", "Packaging ($)", "0.00"], ["target", "Target margin (%)", "30"],
        ["gateway", "Payment provider", "shopify"]];
@@ -79,11 +90,13 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
   const money = (c) => (c < 0 ? "-$" : "$") + (Math.abs(c) / 100).toFixed(2);
   function calc() {
     const v = {};
-    for (const k of ["price", "shipCharged", "cost", "label", "packaging"]) v[k] = cents($(k).value);
-    if (PLATFORM === "ebay") v.salesTax = cents($("salesTax").value);
+    // money fields this platform shows; the rest count as $0
+    for (const k of ["price", "shipCharged", "salesTax", "cost", "label", "packaging", "procFixed"]) v[k] = $(k) ? cents($(k).value) : 0;
     const target = Number($("target").value);
     const fvfRate = PLATFORM === "ebay" ? Number($("fvf").value) : 0;
-    if (Object.values(v).some((x) => x === null) || !(target >= 0 && target < 100) || !(fvfRate >= 0 && fvfRate < 100)) {
+    const procRate = PLATFORM === "mercari" ? Number($("procPct").value) : 0;
+    if (Object.values(v).some((x) => x === null) || !(target >= 0 && target < 100) || !(fvfRate >= 0 && fvfRate < 100)
+        || !(procRate >= 0 && procRate < 100)) {
       $("keep").textContent = "-"; $("margin").textContent = "Check the numbers: use plain amounts like 18.00.";
       $("breakdown").innerHTML = ""; $("targetPrice").textContent = ""; return;
     }
@@ -102,6 +115,20 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
       lines.push([`Final value fee (${fvfRate}% of the sale incl. shipping and tax)`, pct(Math.min(total, top), rate) + pct(Math.max(0, total - top), 235)],
                  ["Per-order fee", total <= 1000 ? 30 : 40]);
       pctTotal = rate; fixed = 40;  // target price below assumes no sales tax and an order over $10
+    } else if (PLATFORM === "poshmark") {
+      // Poshmark US: $2.95 flat on sales under $15, 20% at $15 and up (the buyer pays shipping to Poshmark)
+      lines.push([v.price < 1500 ? "Poshmark fee ($2.95 on sales under $15)" : "Poshmark fee (20%)", v.price < 1500 ? 295 : pct(v.price, 2000)]);
+      pctTotal = 2000; fixed = 0;
+    } else if (PLATFORM === "mercari") {
+      // Mercari US: 10% of the item price plus buyer-paid shipping; a processing fee only if your sale shows one
+      const proc = Math.round(procRate * 100);
+      lines.push(["Selling fee (10% of item and shipping)", pct(paid, 1000)]);
+      if (proc || v.procFixed) lines.push([`Payment processing (${procRate}% + ${money(v.procFixed)})`, pct(paid, proc) + v.procFixed]);
+      pctTotal = 1000 + proc; fixed = v.procFixed;
+    } else if (PLATFORM === "depop") {
+      // Depop US: no selling fee; payment processing 3.3% + $0.45 on the whole total, shipping and tax included
+      lines.push(["Payment processing (3.3% + $0.45 of the total incl. tax)", pct(paid + v.salesTax, 330) + 45]);
+      pctTotal = 330; fixed = 45;  // target price below assumes no sales tax
     } else {
       const other = $("gateway").value === "other" ? 200 : 0;
       lines.push(["Payment processing (2.9% + $0.30)", pct(paid, 290) + 30]);
@@ -109,7 +136,7 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
       pctTotal = 290 + other; fixed = 30;
     }
     const fees = lines.reduce((a, l) => a + l[1], 0), keep = paid - costs - fees;
-    const rows = [[PLATFORM === "ebay" && v.salesTax ? "Buyer pays (item and shipping; the tax goes to the state)" : "Buyer pays", paid],
+    const rows = [[(PLATFORM === "ebay" || PLATFORM === "depop") && v.salesTax ? "Buyer pays (item and shipping; the tax goes to the state)" : "Buyer pays", paid],
                   ...lines.map(([t, c]) => [t, -c]), ["Your costs (make, label, packaging)", -costs], ["You keep", keep]];
     $("breakdown").innerHTML = "";
     for (const [t, c] of rows) {
@@ -122,8 +149,14 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
     $("margin").textContent = paid ? `(${(Math.round(keep * 1000 / paid) / 10).toFixed(1)}% of what the buyer pays)` : "";
     // price for the target margin: (costs + fixed fees) / (1 - % fees - target) - shipping charged
     const den = 10000 - pctTotal - Math.round(target * 100);
-    $("targetPrice").textContent = den <= 0 ? `A ${target}% margin isn't reachable after these fees.`
-      : `To keep ${target}%, charge about ${money(Math.floor(((costs + fixed) * 10000 * 10 / den + 5) / 10) - v.shipCharged)} for the item.`;
+    let price = den > 0 ? Math.floor(((costs + fixed) * 10000 * 10 / den + 5) / 10) - v.shipCharged : null;
+    if (PLATFORM === "poshmark" && price !== null && price < 1500) {
+      // under $15 the fee is a flat $2.95, so the price is (costs + 2.95) / (1 - target), kept below $15
+      const flatDen = 10000 - Math.round(target * 100);
+      price = flatDen > 0 ? Math.min(Math.floor(((costs + 295) * 10000 * 10 / flatDen + 5) / 10), 1500) : 1500;
+    }
+    $("targetPrice").textContent = price === null ? `A ${target}% margin isn't reachable after these fees.`
+      : `To keep ${target}%, charge about ${money(price)} for the item.`;
   }
   calc();
 })();
