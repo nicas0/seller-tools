@@ -20,7 +20,10 @@
   .step { display:inline-block; width:26px; height:26px; border-radius:50%; background:var(--green); color:#fff; text-align:center; font-weight:700; margin-right:8px; line-height:26px; font-size:14px; }
   .drop { display: block; border: 2px dashed var(--line); border-radius: 10px; padding: 26px; text-align: center; cursor: pointer; }
   .drop.over { border-color: var(--green); background: var(--green-soft); }
-  .drop input { display:none; }
+  /* invisible but still reachable with Tab (display:none would lock keyboard users out); outline when focused */
+  .drop { position: relative; }
+  .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+  .drop:focus-within { outline: 3px solid var(--green); outline-offset: 2px; }
   table { border-collapse: collapse; width: 100%; } th, td { text-align:left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
   th { font-size: 13px; color: var(--muted); font-weight: 600; }
   input[type=text] { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
