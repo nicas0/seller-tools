@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Calculadora de comisiones de Etsy: cuánto ganas por venta y qué precio cobrar</title>
+<meta name="description" content="Calculadora gratis de comisiones de Etsy para vendedores en EE. UU.: comisión de transacción, procesamiento de pago, publicación y Offsite Ads, tu ganancia por venta y el precio para el margen que quieres.">
+<link rel="canonical" href="https://nicas0.github.io/seller-tools/tools/calculadora-comisiones-etsy.html">
+<meta property="og:title" content="Calculadora de comisiones de Etsy: cuánto ganas por venta">
+<meta property="og:description" content="Las comisiones de Etsy, tu ganancia por venta y el precio para el margen que quieres. Funciona en tu navegador.">
+<meta property="og:url" content="https://nicas0.github.io/seller-tools/tools/calculadora-comisiones-etsy.html">
+<meta property="og:image" content="https://nicas0.github.io/seller-tools/img/share.png">
+<link rel="alternate" hreflang="en" href="https://nicas0.github.io/seller-tools/tools/etsy-fee-calculator.html">
+<link rel="alternate" hreflang="es" href="https://nicas0.github.io/seller-tools/tools/calculadora-comisiones-etsy.html">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .calc { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 16px; }
+  .calc label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+  .calc input, .calc select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); }
+  .calc input:focus, .calc select:focus { outline: 3px solid var(--green); outline-offset: 1px; }
+  .big { font-size: 30px; font-weight: 800; }
+</style>
+</head>
+<body>
+<header><a href="../index.html">Seller Tools</a><nav><a href="etsy-fee-calculator.html">English</a><a href="../guides.html">Guides</a></nav></header>
+<main>
+<h1>Calculadora de comisiones de Etsy</h1>
+<p class="lede">Escribe tu precio y tus costos: verás las comisiones de Etsy, lo que te queda y el precio para el margen que quieres. Todo se calcula en tu navegador; no se envía nada.</p>
+<div class="card">
+  <div class="calc" id="inputs"></div>
+</div>
+<div class="card" aria-live="polite">
+  <p>Te queda por venta: <span class="big" id="keep">-</span> <span id="margin" class="lede"></span></p>
+  <table id="breakdown"></table>
+  <p id="targetPrice"></p>
+</div>
+<p class="muted">Tarifas de Etsy para vendedores en EE. UU. (revisadas en octubre de 2026): 6.5% de transacción, 3% + $0.25
+de procesamiento de pago, $0.20 por publicación, Offsite Ads 15% (12% para tiendas con más de $10,000 al año) con un
+máximo de $100. Las comisiones se redondean por artículo, así que tu estado de cuenta puede variar por un centavo. Tu
+estado de cuenta de Etsy es la referencia final. Otros países tienen otras tarifas.</p>
+</main>
+<footer>Hecho por nicnak. Sin rastreo ni cookies; esta página no tiene acceso a internet. No es asesoría contable ni fiscal.</footer>
+<script>
+"use strict";
+(() => {
+  // Las mismas fórmulas que la calculadora en inglés (tools/etsy-fee-calculator.html), en centavos.
+  const FIELDS = [["price", "Precio del artículo ($)", "18.00"], ["shipCharged", "Envío que cobras ($)", "0.00"],
+    ["cost", "Costo de hacerlo ($)", "6.50"], ["label", "Etiqueta de envío que pagas ($)", "4.50"],
+    ["packaging", "Empaque ($)", "0.00"], ["target", "Margen que quieres (%)", "30"], ["offsite", "¿Vendido por un Offsite Ad?", "no"]];
+  const $ = (id) => document.getElementById(id);
+  const box = $("inputs");
+  for (const [id, label, value] of FIELDS) {
+    const l = document.createElement("label"); l.textContent = label;
+    let el;
+    if (id === "offsite") {
+      el = document.createElement("select");
+      for (const [v, t] of [["no", "No"], ["yes15", "Sí, 15%"], ["yes12", "Sí, 12% (tiendas de más de $10k al año)"]]) el.appendChild(new Option(t, v));
+    } else { el = document.createElement("input"); el.type = "text"; el.inputMode = "decimal"; }
+    el.id = id; el.value = value; el.addEventListener("input", calc); el.addEventListener("change", calc);
+    l.appendChild(el); box.appendChild(l);
+  }
+  function cents(s) {
+    s = String(s).trim().replace(/^\$/, "").replace(/,/g, "");
+    if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+    const [w, f = ""] = s.split(".");
+    return Number(w) * 100 + Number((f + "00").slice(0, 2));
+  }
+  const pct = (amount, h) => Math.floor((amount * h + 5000) / 10000);
+  const money = (c) => (c < 0 ? "-$" : "$") + (Math.abs(c) / 100).toFixed(2);
+  function calc() {
+    const v = {};
+    for (const k of ["price", "shipCharged", "cost", "label", "packaging"]) v[k] = cents($(k).value);
+    const target = Number($("target").value);
+    if (Object.values(v).some((x) => x === null) || !(target >= 0 && target < 100)) {
+      $("keep").textContent = "-"; $("margin").textContent = "Revisa los números: usa cantidades como 18.00.";
+      $("breakdown").innerHTML = ""; $("targetPrice").textContent = ""; return;
+    }
+    const paid = v.price + v.shipCharged, costs = v.cost + v.label + v.packaging;
+    const offsite = { no: 0, yes15: 1500, yes12: 1200 }[$("offsite").value];
+    const lines = [["Comisión de transacción (6.5%)", pct(paid, 650)], ["Procesamiento de pago (3% + $0.25)", pct(paid, 300) + 25],
+                   ["Publicación (se renueva al vender)", 20]];
+    if (offsite) lines.push([`Offsite Ads (${offsite / 100}%, máximo $100)`, Math.min(pct(paid, offsite), 10000)]);
+    const fees = lines.reduce((a, l) => a + l[1], 0), keep = paid - costs - fees;
+    const rows = [["El comprador paga", paid], ...lines.map(([t, c]) => [t, -c]), ["Tus costos (hacerlo, etiqueta, empaque)", -costs], ["Te queda", keep]];
+    $("breakdown").innerHTML = "";
+    for (const [t, c] of rows) {
+      const tr = document.createElement("tr"), a = document.createElement("td"), b = document.createElement("td");
+      a.textContent = t; b.textContent = money(c); b.className = "num";
+      if (t === "Te queda") a.style.fontWeight = b.style.fontWeight = "700";
+      tr.append(a, b); $("breakdown").appendChild(tr);
+    }
+    $("keep").textContent = money(keep);
+    $("margin").textContent = paid ? `(${(Math.round(keep * 1000 / paid) / 10).toFixed(1)}% de lo que paga el comprador)` : "";
+    const den = 10000 - 650 - 300 - offsite - Math.round(target * 100);
+    $("targetPrice").textContent = den <= 0 ? `Un margen de ${target}% no es posible con estas comisiones.`
+      : `Para quedarte con ${target}%, cobra unos ${money(Math.floor(((costs + 45) * 10000 * 10 / den + 5) / 10) - v.shipCharged)} por el artículo.`;
+  }
+  calc();
+})();
+</script>
+</body>
+</html>
