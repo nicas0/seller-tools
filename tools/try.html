@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+</head>
+<body>
+<title>Try It Out: NicNak</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* One narrow column read on a phone: a short questionnaire on graph-paper ground, like the planners being tested. */
+:root {
+  --ground: #f3f6f2;
+  --grid: #dfe8de;
+  --paper: #ffffff;
+  --ink: #1d2a22;
+  --muted: #5b6b60;
+  --green: #1f7a50;
+  --green-soft: #e3f1e8;
+  --line: #c9d6cc;
+  --warn: #9a4b12;
+  --display: "Segoe UI", system-ui, sans-serif;
+  --body: "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #111813; --grid: #1a241d; --paper: #18211b; --ink: #e6efe8; --muted: #9db0a3;
+    --green: #5cc58f; --green-soft: #1d3326; --line: #2f3f34; --warn: #f0a46c; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #111813; --grid: #1a241d; --paper: #18211b; --ink: #e6efe8; --muted: #9db0a3;
+  --green: #5cc58f; --green-soft: #1d3326; --line: #2f3f34; --warn: #f0a46c; color-scheme: dark;
+}
+[hidden] { display: none !important; }
+body {
+  background-color: var(--ground);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 22px 22px;
+  color: var(--ink);
+  font: 17px/1.55 var(--body);
+}
+.wrap {
+  max-width: 34rem; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+  display: grid; gap: 18px;
+}
+header { display: grid; gap: 6px; }
+.eyebrow { font: 700 12px/1 var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--green); }
+h1 { font: 800 clamp(30px, 8vw, 40px)/1.05 var(--display); margin: 0; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); }
+.sheet { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 20px; display: grid; gap: 22px; }
+fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 10px; min-width: 0; }
+legend, .q { font: 600 19px/1.3 var(--display); padding: 0; margin-bottom: 4px; }
+.hint { color: var(--muted); font-size: 15px; margin: -6px 0 0; }
+select, textarea, input[type=number] {
+  font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
+  padding: 10px 12px; width: 100%; box-sizing: border-box;
+}
+textarea { min-height: 84px; resize: vertical; }
+.money { display: flex; align-items: center; gap: 8px; max-width: 12rem; }
+.money span { font-weight: 700; }
+.choice { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.choice:has(input:checked) { border-color: var(--green); background: var(--green-soft); }
+.choice input { margin-top: 5px; accent-color: var(--green); }
+:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+button {
+  font: 700 17px/1 var(--body); border: 0; border-radius: 4px; padding: 14px 18px; cursor: pointer;
+  background: var(--green); color: var(--paper);
+}
+button.quiet { background: transparent; color: var(--green); border: 1px solid var(--green); }
+.err { color: var(--warn); margin: 0; font-weight: 700; }
+.done { display: grid; gap: 14px; }
+.code { font: 14px/1.4 var(--mono); word-break: break-all; background: var(--green-soft); border: 1px dashed var(--green); padding: 12px; border-radius: 4px; user-select: all; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+footer { color: var(--muted); font-size: 14px; }
+@media (prefers-reduced-motion: no-preference) { .choice { transition: background .15s, border-color .15s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">NicNak Printables · tester</span>
+    <h1>Try it, then tell us the truth</h1>
+    <p class="lede">You were sent one of our printables or spreadsheets. Use it the way you normally would, without asking for help, then answer four questions. It takes about two minutes. No name or email needed.</p>
+  </header>
+
+  <form id="form" class="sheet" novalidate>
+    <fieldset>
+      <label class="q" for="product">What did you try?</label>
+      <select id="product" required>
+        <option value="">Choose one…</option>
+      </select>
+    </fieldset>
+
+    <fieldset id="use">
+      <legend>Could you use it on your own?</legend>
+      <label class="choice"><input type="radio" name="use" value="alone" id="use-alone"> Yes, without any help</label>
+      <label class="choice"><input type="radio" name="use" value="stuck" id="use-stuck"> Yes, but I got stuck at least once</label>
+      <label class="choice"><input type="radio" name="use" value="gave_up" id="use-gave"> No, I gave up</label>
+    </fieldset>
+
+    <fieldset>
+      <label class="q" for="conf">What was confusing or annoying, if anything?</label>
+      <p class="hint">The exact step or word that tripped you up helps most.</p>
+      <textarea id="conf" maxlength="600" placeholder="e.g. I didn't know where to type the dates"></textarea>
+    </fieldset>
+
+    <fieldset id="pay">
+      <legend>Would you pay for it?</legend>
+      <label class="choice"><input type="radio" name="pay" value="yes" id="pay-yes"> Yes</label>
+      <label class="choice"><input type="radio" name="pay" value="no" id="pay-no"> No</label>
+      <label class="choice"><input type="radio" name="pay" value="unsure" id="pay-unsure"> Not sure</label>
+    </fieldset>
+
+    <fieldset id="price-box" hidden>
+      <label class="q" for="price">The most you'd pay</label>
+      <div class="money"><span>$</span><input type="number" id="price" min="0" max="200" step="0.5" inputmode="decimal" placeholder="4"></div>
+    </fieldset>
+
+    <fieldset id="why-box" hidden>
+      <label class="q" for="why">What would make it worth paying for?</label>
+      <textarea id="why" maxlength="600" placeholder="e.g. I'd just use a free template / it needs a phone version"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <label class="q" for="wish">One thing you'd change or add</label>
+      <textarea id="wish" maxlength="600" placeholder="Optional"></textarea>
+    </fieldset>
+
+    <p class="err" id="err" hidden></p>
+    <button type="submit" id="send">Finish</button>
+  </form>
+
+  <section class="sheet done" id="done" hidden aria-live="polite">
+    <h2 class="q" id="done-title">Thank you</h2>
+    <p id="done-saved" hidden>Your answers were saved. You're done.</p>
+    <div id="done-code" hidden class="done">
+      <p>Last step: copy this code and text it back to the person who sent you the link. It holds only your answers.</p>
+      <div class="code" id="code"></div>
+      <div class="row">
+        <button type="button" id="copy">Copy code</button>
+        <button type="button" class="quiet" id="again">Answer for another product</button>
+      </div>
+      <p class="hint" id="copied" hidden>Copied. Paste it into a text message.</p>
+    </div>
+  </section>
+
+  <footer>Your answers go to one small shop and are used only to improve these products. Please don't type names, emails or phone numbers in the boxes.</footer>
+</div>
+
+<script>
+const PRODUCTS = [
+  ["csv-cleaner", "CSV Cleaner (offline tool for Etsy and Shopify order files)"],
+  ["profit-check", "Profit Check (profit from your order export)"],
+  ["etsy-profit-calculator", "Etsy Profit Calculator spreadsheet"],
+  ["christmas-planner", "Christmas Gift & Holiday Budget Planner (printable)"],
+  ["christmas-gift-budget-tracker", "Christmas Gift & Budget Tracker spreadsheet"],
+  ["meal-planner", "Meal Planner & Grocery List (printable)"],
+  ["chore-chart", "Kids' Chore Chart (printable)"],
+  ["planner-2027", "2027 Weekly Planner (printable)"],
+  ["digital-planner-2027", "2027 Digital Planner (GoodNotes / iPad)"],
+  ["personal-budget", "Personal Budget spreadsheet"],
+];
+const $ = (id) => document.getElementById(id);
+const sel = $("product");
+for (const [id, name] of PRODUCTS) sel.add(new Option(name, id));
+const fromLink = location.hash.slice(1);
+if (PRODUCTS.some(([id]) => id === fromLink)) sel.value = fromLink;
+
+function radio(name) { const r = document.querySelector(`input[name=${name}]:checked`); return r ? r.value : ""; }
+function scrub(s) {   // keep private details out of the log
+  return s.trim()
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[removed]")
+    .replace(/(\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g, "[removed]");
+}
+document.querySelectorAll("input[name=pay]").forEach((r) => r.addEventListener("change", () => {
+  $("price-box").hidden = radio("pay") !== "yes";
+  $("why-box").hidden = radio("pay") === "yes";
+}));
+
+function encode(obj) {
+  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+  let bin = ""; bytes.forEach((b) => bin += String.fromCharCode(b));
+  return "MINT-T1." + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+let dbP = null;
+if (window.claude && claude.use) dbP = claude.use("db").catch(() => null);
+
+$("form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const err = $("err");
+  const missing = !sel.value ? "Choose what you tried." : !radio("use") ? "Say whether you could use it on your own."
+    : !radio("pay") ? "Say whether you'd pay for it." : "";
+  if (missing) { err.textContent = missing; err.hidden = false; return; }
+  err.hidden = true;
+  const price = radio("pay") === "yes" && $("price").value !== "" ? Math.round(Math.max(0, Math.min(200, Number($("price").value))) * 100) : null;
+  const answer = {
+    v: 1, id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()).replace(/-/g, "").slice(0, 12),
+    p: sel.value, on: new Date().toISOString().slice(0, 10), use: radio("use"), conf: scrub($("conf").value),
+    pay: radio("pay"), price, why: radio("pay") === "yes" ? "" : scrub($("why").value), wish: scrub($("wish").value),
+  };
+  const code = encode(answer);
+  $("send").disabled = true;
+  let saved = false;
+  try {
+    const [db, user] = await Promise.all([dbP, claude.use ? claude.use("user").catch(() => null) : null]);
+    if (db && user) {
+      const uid = await user.id();
+      const ref = db.doc(`responses/${uid}`);   // one doc per tester, so Mint can list them all
+      const snap = await ref.get();
+      const prev = snap.exists && Array.isArray(snap.data().codes) ? snap.data().codes : [];
+      await ref.set({ codes: prev.concat(code).slice(-20), updated: answer.on });
+      saved = true;
+    }
+  } catch (e) { saved = false; }
+  $("send").disabled = false;
+  $("form").hidden = true;
+  $("done").hidden = false;
+  $("done-saved").hidden = !saved;
+  $("done-code").hidden = saved;
+  $("code").textContent = code;
+  $("done").scrollIntoView({ block: "start" });
+});
+
+$("copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("code").textContent); $("copied").hidden = false; }
+  catch (e) {
+    const r = document.createRange(); r.selectNodeContents($("code"));
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    $("copied").textContent = "Selected. Copy it, then paste it into a text message."; $("copied").hidden = false;
+  }
+});
+$("again").addEventListener("click", () => {
+  $("form").reset(); $("price-box").hidden = true; $("why-box").hidden = true;
+  $("done").hidden = true; $("form").hidden = false; $("copied").hidden = true; window.scrollTo(0, 0);
+});
+</script>
+
+</body>
+</html>
