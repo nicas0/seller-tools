@@ -55,12 +55,21 @@ ideas, not mistakes. Etsy can change its limits; its listing editor is the final
     const problems = [];
     if (title.length > 140) problems.push(`The title is ${title.length} characters; Etsy allows 140.`);
     if (!title) problems.push("Add a title.");
+    for (const c of ["&", "%", ":"]) {   // Etsy's editor refuses a title with two of any of these
+      const n = title.split(c).length - 1;
+      if (n > 1) problems.push(`The title uses "${c}" ${n} times; Etsy allows it once.`);
+    }
+    const caps = title.split(/\s+/).filter((w) => /[A-Z]{2}/.test(w) && w === w.toUpperCase());
+    if (caps.length > 3) problems.push(`${caps.length} words in capitals (${caps.join(", ")}); Etsy allows 3.`);
     if (tags.length > 13) problems.push(`${tags.length} tags; Etsy allows 13.`);
     const seen = new Map();
     $("breakdown").innerHTML = "";
     tags.forEach((t, i) => {
       const key = t.toLowerCase();
-      const issue = t.length > 20 ? `${t.length} characters: Etsy allows 20` : seen.has(key) ? `repeats tag ${seen.get(key) + 1}` : "";
+      const odd = t.replace(/[A-Za-z0-9 '\-’™©®]/g, "");
+      const issue = t.length > 20 ? `${t.length} characters: Etsy allows 20`
+        : odd ? `"${[...new Set(odd)].join("")}" isn't allowed: only letters, numbers, spaces, - and '`
+        : seen.has(key) ? `repeats tag ${seen.get(key) + 1}` : "";
       if (issue) problems.push(`Tag ${i + 1} "${t}": ${issue}.`);
       if (!seen.has(key)) seen.set(key, i);
       const tr = document.createElement("tr"), a = document.createElement("td"), b = document.createElement("td");

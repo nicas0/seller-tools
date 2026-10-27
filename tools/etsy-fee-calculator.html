@@ -88,6 +88,7 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
     l.appendChild(el); box.appendChild(l);
   }
   // "$1,234.50" -> cents; anything else -> null
+  const pctNum = (s) => Number(String(s).trim().replace(/%$/, ""));   // "15%" reads as 15
   function cents(s) {
     s = String(s).trim().replace(/^\$/, "").replace(/,/g, "");
     if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
@@ -100,10 +101,10 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
     const v = {};
     // money fields this platform shows; the rest count as $0
     for (const k of ["price", "shipCharged", "salesTax", "cost", "label", "packaging", "procFixed"]) v[k] = $(k) ? cents($(k).value) : 0;
-    const target = Number($("target").value);
-    const fvfRate = PLATFORM === "ebay" ? Number($("fvf").value) : 0;
-    const procRate = PLATFORM === "mercari" ? Number($("procPct").value) : 0;
-    const refRate = PLATFORM === "amazon" ? Number($("referral").value) : 0;
+    const target = pctNum($("target").value);
+    const fvfRate = PLATFORM === "ebay" ? pctNum($("fvf").value) : 0;
+    const procRate = PLATFORM === "mercari" ? pctNum($("procPct").value) : 0;
+    const refRate = PLATFORM === "amazon" ? pctNum($("referral").value) : 0;
     if (Object.values(v).some((x) => x === null) || !(target >= 0 && target < 100) || !(fvfRate >= 0 && fvfRate < 100)
         || !(procRate >= 0 && procRate < 100) || !(refRate >= 0 && refRate < 100)) {
       $("keep").textContent = "-"; $("margin").textContent = "Check the numbers: use plain amounts like 18.00.";

@@ -59,6 +59,7 @@ la cuota mensual de tu plan no está incluida. Revisa Configuración > Pagos en 
     el.id = id; el.value = value; el.addEventListener("input", calc); el.addEventListener("change", calc);
     l.appendChild(el); box.appendChild(l);
   }
+  const pctNum = (s) => Number(String(s).trim().replace(/%$/, ""));   // "15%" reads as 15
   function cents(s) {
     s = String(s).trim().replace(/^\$/, "").replace(/,/g, "");
     if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
@@ -70,7 +71,7 @@ la cuota mensual de tu plan no está incluida. Revisa Configuración > Pagos en 
   function calc() {
     const v = {};
     for (const k of ["price", "shipCharged", "cost", "label", "packaging"]) v[k] = cents($(k).value);
-    const target = Number($("target").value);
+    const target = pctNum($("target").value);
     if (Object.values(v).some((x) => x === null) || !(target >= 0 && target < 100)) {
       $("keep").textContent = "-"; $("margin").textContent = "Revisa los números: usa cantidades como 18.00.";
       $("breakdown").innerHTML = ""; $("targetPrice").textContent = ""; return;

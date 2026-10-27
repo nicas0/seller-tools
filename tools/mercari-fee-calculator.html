@@ -33,7 +33,7 @@
   <table id="breakdown"></table>
   <p id="targetPrice"></p>
 </div>
-<p class="muted">Mercari US: a 10% selling fee on the item price plus any shipping the buyer pays (checked October 2026). Mercari has changed its fees several times; if your sale summary shows a payment processing fee (some sales have shown 2.9% + $0.30), type it into the two processing boxes. Your sale summary is the final word.</p>
+<p class="muted">Mercari US: a 10% selling fee on the item price plus any shipping the buyer pays, and no separate payment processing fee for sellers since January 6, 2025 (checked October 2026). Mercari has changed its fees several times; if your sale summary shows a processing fee, type it into the two processing boxes. Your sale summary is the final word.</p>
 <p>Want this for every product, from your real orders? Try the free <a href="../profit-check.html">Profit Check</a>.
 Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> sorts them out.</p>
 <p>Sell somewhere else too? Free fee calculators for <a href="etsy-fee-calculator.html">Etsy</a>, <a href="shopify-fee-calculator.html">Shopify</a>, <a href="ebay-fee-calculator.html">eBay</a>, <a href="poshmark-fee-calculator.html">Poshmark</a>, <a href="depop-fee-calculator.html">Depop</a> and <a href="amazon-fee-calculator.html">Amazon</a>.</p>
@@ -88,6 +88,7 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
     l.appendChild(el); box.appendChild(l);
   }
   // "$1,234.50" -> cents; anything else -> null
+  const pctNum = (s) => Number(String(s).trim().replace(/%$/, ""));   // "15%" reads as 15
   function cents(s) {
     s = String(s).trim().replace(/^\$/, "").replace(/,/g, "");
     if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
@@ -100,10 +101,10 @@ Mixed-up exports first? The free <a href="../csv-cleaner.html">CSV Cleaner</a> s
     const v = {};
     // money fields this platform shows; the rest count as $0
     for (const k of ["price", "shipCharged", "salesTax", "cost", "label", "packaging", "procFixed"]) v[k] = $(k) ? cents($(k).value) : 0;
-    const target = Number($("target").value);
-    const fvfRate = PLATFORM === "ebay" ? Number($("fvf").value) : 0;
-    const procRate = PLATFORM === "mercari" ? Number($("procPct").value) : 0;
-    const refRate = PLATFORM === "amazon" ? Number($("referral").value) : 0;
+    const target = pctNum($("target").value);
+    const fvfRate = PLATFORM === "ebay" ? pctNum($("fvf").value) : 0;
+    const procRate = PLATFORM === "mercari" ? pctNum($("procPct").value) : 0;
+    const refRate = PLATFORM === "amazon" ? pctNum($("referral").value) : 0;
     if (Object.values(v).some((x) => x === null) || !(target >= 0 && target < 100) || !(fvfRate >= 0 && fvfRate < 100)
         || !(procRate >= 0 && procRate < 100) || !(refRate >= 0 && refRate < 100)) {
       $("keep").textContent = "-"; $("margin").textContent = "Check the numbers: use plain amounts like 18.00.";

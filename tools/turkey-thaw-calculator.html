@@ -86,7 +86,7 @@ pounds, see the USDA's guide.</p>
   const hours = (m) => `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`;
   function fail(msg) { $("keep").textContent = "-"; $("targetPrice").textContent = msg; $("plan").innerHTML = ""; }
   function calc() {
-    const ws = $("weight").value.trim(), dm = /^(\d{4})-(\d\d)-(\d\d)$/.exec($("date").value), tm = /^(\d\d):(\d\d)/.exec($("time").value);
+    const ws = $("weight").value.trim().replace(/\s*(lbs?|pounds?)\.?$/i, ""), dm = /^(\d{4})-(\d\d)-(\d\d)$/.exec($("date").value), tm = /^(\d\d):(\d\d)/.exec($("time").value);
     const w = /^\d+(\.\d+)?$/.test(ws) ? Number(ws) : NaN;
     const gs = $("guests").value.trim();
     if (gs && !/^\d+$/.test(gs)) return fail("Guests: a whole number, like 12.");

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Christmas budget calculator: split your holiday budget and save for it by December 25</title>
+<meta name="description" content="Free Christmas budget calculator: enter your total holiday budget and the people on your gift list, split it across gifts, food, decorations, cards, wrapping and travel, and see what to set aside each week until December 25.">
+<link rel="canonical" href="https://nicas0.github.io/seller-tools/tools/christmas-budget-calculator.html">
+<meta property="og:title" content="Christmas budget calculator">
+<meta property="og:description" content="Your holiday budget in; what each category and each person on your list gets, and what to save each week until Christmas, out.">
+<meta property="og:url" content="https://nicas0.github.io/seller-tools/tools/christmas-budget-calculator.html">
+<meta property="og:image" content="https://nicas0.github.io/seller-tools/img/share.png">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .calc { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 16px; }
+  .calc label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+  .calc input { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); width: 100%; }
+  .calc input:focus { outline: 3px solid var(--green); outline-offset: 1px; }
+  .big { font-size: 28px; font-weight: 800; }
+  #split input { width: 5.5em; font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); text-align: right; }
+</style>
+</head>
+<body>
+<header><a href="../index.html">Seller Tools</a><nav><a href="../guides.html">Guides</a></nav></header>
+<main>
+<h1>Christmas budget calculator</h1>
+<p class="lede">Enter what you can spend on the holidays and how many people are on your gift list. See what each part of
+Christmas gets, what each person's gift can cost, and what to set aside each week until December 25. Everything runs in
+your browser.</p>
+<div class="card">
+  <div class="calc">
+    <label>Total holiday budget ($)<input id="total" type="text" inputmode="decimal" value="800"></label>
+    <label>People on your gift list<input id="people" type="text" inputmode="numeric" value="10"></label>
+    <label>Already set aside ($)<input id="saved" type="text" inputmode="decimal" value="0"></label>
+  </div>
+</div>
+<div class="card" aria-live="polite">
+  <p>Each person's gift can cost about:</p>
+  <p class="big" id="keep">-</p>
+  <p id="targetPrice"></p>
+</div>
+<h2>Your split</h2>
+<p>A starting split you can change: type your own percentages. They should add up to 100.</p>
+<div style="overflow-x:auto">
+<table id="split">
+<tr><th>Category</th><th class="num">Percent</th><th class="num">Amount</th></tr>
+</table>
+</div>
+<p id="sum" class="muted"></p>
+<h2>Keeping to it</h2>
+<ul>
+<li>Set the total first, then split it: a budget built from a gift list tends to grow.</li>
+<li>Write each gift down as you buy it, with what it cost, so the gifts line shows what's left.</li>
+<li>Cards and postage add up: overseas cards and parcels cost more, and the post gets busy in December.</li>
+</ul>
+<p class="muted">The starting split is just a place to begin, not advice: every household's Christmas is different.</p>
+<div class="card"><h2>The whole Christmas plan on paper: budget, gift list, cards and countdown</h2><p>Christmas Gift &amp; Holiday Budget Planner: printable PDF, US Letter and A4.</p><a class="cta" href="https://nicnak.gumroad.com/l/gerie">Get it ($5)</a></div>
+</main>
+<footer>Made by nicnak. No tracking, no cookies; this page has no internet access.</footer>
+<script>
+"use strict";
+(() => {
+  // a starting split (percent); the same categories as the Christmas planner's holiday budget page
+  const CATS = [["Gifts", 55], ["Food and drinks", 15], ["Decorations", 5], ["Cards and postage", 5], ["Wrapping", 5],
+                ["Travel", 10], ["Events and outings", 5], ["Charity", 0]];
+  const $ = (id) => document.getElementById(id);
+  const money = (n) => "$" + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  // "$1,200", "1,200" and "1200" all read as 1200, as on the site's other calculators (and "55%" as 55)
+  const num = (s) => { s = String(s).trim().replace(/^\$/, "").replace(/,/g, "").replace(/%$/, "");
+                       return /^\d+(\.\d+)?$/.test(s) ? Number(s) : NaN; };
+  const table = $("split");
+  CATS.forEach(([name, pct], i) => {
+    const tr = document.createElement("tr");
+    const a = document.createElement("td"); a.textContent = name;
+    const b = document.createElement("td"); b.className = "num";
+    const inp = document.createElement("input"); inp.id = "pct" + i; inp.type = "text"; inp.inputMode = "decimal";
+    inp.value = String(pct); inp.setAttribute("aria-label", name + " percent"); inp.addEventListener("input", calc);
+    b.appendChild(inp);
+    const c = document.createElement("td"); c.className = "num"; c.id = "amt" + i;
+    tr.append(a, b, c); table.appendChild(tr);
+  });
+  ["total", "people", "saved"].forEach((id) => $(id).addEventListener("input", calc));
+  function weeksLeft(today) {
+    let xmas = new Date(today.getFullYear(), 11, 25);
+    if (today > xmas) xmas = new Date(today.getFullYear() + 1, 11, 25);
+    return Math.max(1, Math.ceil((xmas - today) / (7 * 24 * 3600 * 1000)));
+  }
+  function fail(msg) { $("keep").textContent = "-"; $("targetPrice").textContent = msg; }
+  function calc() {
+    const total = num($("total").value), people = num($("people").value), saved = num($("saved").value || "0");
+    const pcts = CATS.map((_, i) => num($("pct" + i).value || "0"));
+    const sum = pcts.reduce((s, p) => s + (isNaN(p) ? 0 : p), 0);
+    pcts.forEach((p, i) => { $("amt" + i).textContent = isNaN(total) || isNaN(p) ? "-" : money(total * p / 100); });
+    $("sum").textContent = `Your split adds up to ${Math.round(sum * 100) / 100}%` + (Math.abs(sum - 100) > 0.001 ? ": change a line so it's 100%." : ".");
+    if (isNaN(total) || total <= 0) return fail("Enter your total budget, like 800.");
+    if (isNaN(people) || people < 1 || people !== Math.floor(people)) return fail("People on your gift list: a whole number, like 10.");
+    if (isNaN(saved) || saved < 0) return fail("Already set aside: a number, like 0 or 150.");
+    if (isNaN(pcts[0])) return fail("Gifts percent: a number, like 55.");
+    $("keep").textContent = money(total * pcts[0] / 100 / people);
+    const weeks = weeksLeft(new Date()), need = Math.max(total - saved, 0);
+    $("targetPrice").textContent = need === 0 ? "You've already set the whole budget aside."
+      : `To have the rest (${money(need)}) by December 25, set aside about ${money(need / weeks)} a week for ${weeks} week${weeks === 1 ? "" : "s"}.`;
+  }
+  calc();
+})();
+</script>
+</body>
+</html>

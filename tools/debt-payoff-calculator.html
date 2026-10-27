@@ -70,7 +70,7 @@ Lenders may work out interest daily, so real statements can differ a little. Not
     return Number(w) * 100 + Number((f + "00").slice(0, 2));
   }
   // APR like "22.99" -> hundredths of a percent (2299)
-  const hundredths = cents;
+  const hundredths = (s) => cents(String(s).trim().replace(/%$/, ""));   // "22.99%" reads as 22.99
   const money = (c) => (c < 0 ? "-$" : "$") + (Math.abs(c) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   function calc() {
     const extra = cents($("extra").value), debts = [];
