@@ -58,6 +58,7 @@ Lenders may work out interest daily, so real statements can differ a little. Not
     ["name", "bal", "apr", "min"].forEach((k, j) => {
       const td = document.createElement("td"), el = document.createElement("input");
       el.type = "text"; el.id = `${k}${i}`; el.value = row[j]; if (j) el.inputMode = "decimal";
+      el.setAttribute("aria-label", `Debt ${i + 1} ` + ["name", "balance ($)", "rate (APR %)", "minimum ($)"][j]);   // for screen readers
       el.addEventListener("input", calc); td.appendChild(el); tr.appendChild(td);
     });
     $("rows").appendChild(tr);

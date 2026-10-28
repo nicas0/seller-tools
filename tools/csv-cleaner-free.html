@@ -6,18 +6,19 @@
 <!-- No network at all: the browser blocks every connection, so your data can't leave this computer. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>CSV Cleaner (free, 50 rows)</title>
+<meta name="description" content="Free CSV cleaner: rename messy columns and find repeated and conflicting rows, with a plain-English change log. Up to 50 rows; works offline, nothing uploads.">
 <style>
   :root { --ink:#1c2722; --muted:#5f6c65; --line:#d5ddd8; --bg:#f6f8f5; --card:#fff; --green:#1c7a4f; --green-soft:#e3f2ea;
           --warn:#8a5a00; --warn-soft:#fff3cd; --bad:#b3362d; --bad-soft:#fde4e1; }
   @media (prefers-color-scheme: dark) { :root { --ink:#e7eee9; --muted:#a7b4ad; --line:#34413a; --bg:#121815; --card:#1a221e;
-          --green:#4cc38a; --green-soft:#183427; --warn:#f0c36b; --warn-soft:#3a3020; --bad:#ff8a80; --bad-soft:#3d2422; } }
+          --green:#4cc38a; --green-soft:#183427; --warn:#f0c36b; --warn-soft:#3a3020; --bad:#ff8a80; --bad-soft:#3d2422; --on-green:#0b1410; } }
   * { box-sizing: border-box; }
   body { margin:0; font:16px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; color:var(--ink); background:var(--bg); }
   main { max-width: 920px; margin: 0 auto; padding: 28px 18px 60px; }
   h1 { font-size: 30px; margin: 0 0 4px; } h2 { font-size: 19px; margin: 0 0 10px; }
   .lede { color: var(--muted); margin: 0 0 22px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; }
-  .step { display:inline-block; width:26px; height:26px; border-radius:50%; background:var(--green); color:#fff; text-align:center; font-weight:700; margin-right:8px; line-height:26px; font-size:14px; }
+  .step { display:inline-block; width:26px; height:26px; border-radius:50%; background:var(--green); color:var(--on-green, #fff); text-align:center; font-weight:700; margin-right:8px; line-height:26px; font-size:14px; }
   .drop { display: block; border: 2px dashed var(--line); border-radius: 10px; padding: 26px; text-align: center; cursor: pointer; }
   .drop.over { border-color: var(--green); background: var(--green-soft); }
   /* invisible but still reachable with Tab (display:none would lock keyboard users out); outline when focused */
@@ -32,7 +33,7 @@
   #namesCard td:nth-child(2) { overflow-wrap: break-word; }
   #namesCard td:nth-child(4) { overflow-wrap: anywhere; }  /* examples like emails have no spaces to break at */
   @media (max-width: 480px) { th, td { padding: 6px 4px; } .card { padding: 14px 12px; } }
-  button { font: inherit; font-weight: 600; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--green); background: var(--green); color: #fff; cursor: pointer; margin: 4px 8px 4px 0; }
+  button { font: inherit; font-weight: 600; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--green); background: var(--green); color: var(--on-green, #fff); cursor: pointer; margin: 4px 8px 4px 0; }
   button.secondary { background: transparent; color: var(--green); }
   .note { padding: 10px 12px; border-radius: 8px; margin: 10px 0; }
   .note.ok { background: var(--green-soft); } .note.warn { background: var(--warn-soft); color: var(--ink); } .note.bad { background: var(--bad-soft); }
